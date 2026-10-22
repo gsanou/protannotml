@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fondations d'immunogénétique</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.js"></script>
+<style>
+  .vdj-stage { border: 1px solid var(--rule); background: var(--panel); border-radius: var(--radius); padding: 16px; }
+  .vdj-svg g.seg { transition: transform .9s cubic-bezier(.4,.1,.2,1), opacity .6s; }
+  .vdj-caption { min-height: 4.6em; font-size: var(--s-1); color: var(--ink-2); margin-top: 10px; }
+  .vdj-caption b { color: var(--ink); }
+  .parser { display: grid; gap: 10px; }
+  .parser .out { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .parser .cell { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; background: var(--paper); min-width: 0; }
+  .parser .cell small { display: block; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+  .parser .cell span { font-family: var(--f-mono); font-size: .92rem; overflow-wrap: anywhere; }
+  .parser .ex { display: flex; flex-wrap: wrap; gap: 6px; }
+  .parser .ex button { font-family: var(--f-mono); }
+  .topo-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+  .topo-toggle button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Module 1 sur 6</span>
+    <nav aria-label="Modules">
+      <a href="index.html">Accueil</a>
+      <a href="m1.html" aria-current="page">1</a><a href="m2.html">2</a><a href="m3.html">3</a><a href="m4.html">4</a><a href="m5.html">5</a><a href="m6.html">6</a>
+    </nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="toc" aria-label="Sommaire"><h2>Sommaire</h2><ol></ol></aside>
+  <main class="article">
+    <p class="eyebrow">Module 1 · Biologie</p>
+    <h1>Fondations d'immunogénétique</h1>
+    <p class="lede">Avant d'entraîner quoi que ce soit, il faut savoir ce que le modèle doit apprendre et pourquoi certaines étiquettes sont ambiguës par nature. Ce module pose le vocabulaire IMGT qui servira de schéma d'étiquetage à tout le projet.</p>
+    <p class="meta-row"><span><b>Durée</b> 60 à 90 min</span><span><b>Prérequis</b> biologie moléculaire de licence</span><span><b>Sortie</b> la hiérarchie d'étiquettes du modèle</span></p>
+
+    <h2 id="pourquoi"><span class="num">1</span>Pourquoi commencer par la biologie</h2>
+    <p>DomainGapAlign ne « devine » rien : il aligne une séquence d'acides aminés sur des séquences de référence IMGT déjà numérotées, puis recopie la numérotation et les annotations de la meilleure référence. Un successeur ML doit retrouver le même résultat sans alignement explicite, et faire mieux là où l'alignement échoue : espèces peu représentées, séquences très mutées, domaines atypiques.</p>
+    <p>Pour cela, chaque sortie du modèle correspond à un concept IMGT précis. Si le concept est mal compris, l'étiquette sera mal construite et l'évaluation trompeuse. Trois exemples que ce module va éclaircir :</p>
+    <ul>
+      <li>un <strong>allèle</strong> est défini au niveau nucléotidique, alors que DomainGapAlign travaille sur des acides aminés. Plusieurs allèles peuvent donc être indiscernables ;</li>
+      <li>la <strong>CDR3</strong> n'est pas codée par un seul gène : elle chevauche les segments V, D et J et contient des nucléotides ajoutés au hasard ;</li>
+      <li>les domaines <strong>V, C et G</strong> n'ont ni la même topologie ni la même numérotation, et un domaine C n'a pas de positions 46 à 76.</li>
+    </ul>
+
+    <h2 id="domaine-ig"><span class="num">2</span>Le domaine Ig, brique de la superfamille IgSF</h2>
+    <p>La superfamille des immunoglobulines (IgSF) regroupe les protéines qui contiennent au moins un <strong>domaine de type Ig</strong> : un sandwich de deux feuillets β, d'une centaine de résidus, souvent stabilisé par un pont disulfure entre deux cystéines conservées. En numérotation IMGT, ces cystéines occupent toujours les positions <strong>23</strong> (1st-CYS) et <strong>104</strong> (2nd-CYS), et un tryptophane conservé occupe la position <strong>41</strong>.</p>
+    <p>IMGT distingue deux grands types de domaines dans l'IgSF :</p>
+    <ul>
+      <li>le <strong>domaine V</strong> (V-DOMAIN, et V-LIKE-DOMAIN hors IG et TR), à neuf brins β : A, B, C, C′, C″, D, E, F, G. Les boucles BC, C′C″ et FG portent les CDR1, CDR2 et CDR3 ;</li>
+      <li>le <strong>domaine C</strong> (C-DOMAIN, et C-LIKE-DOMAIN), à sept brins : A, B, C, D, E, F, G. Il n'a pas de brins C′ et C″ ; un segment transversal CD les remplace.</li>
+    </ul>
+    <p>Les molécules du CMH (MH) et la superfamille MhSF portent un troisième type, le <strong>domaine G</strong> (groove) : quatre brins β qui forment le plancher, puis une hélice α. Deux domaines G forment la poche qui présente le peptide. Son repliement n'a rien à voir avec le domaine Ig, d'où une numérotation propre (positions 1 à 92).</p>
+
+    <figure class="panel">
+      <div class="topo-toggle" role="group" aria-label="Type de domaine">
+        <button class="btn ghost" type="button" id="topoV" aria-pressed="true">Domaine V</button>
+        <button class="btn ghost" type="button" id="topoC" aria-pressed="false">Domaine C</button>
+      </div>
+      <div class="scroll-x"><svg id="topo" viewBox="0 0 720 250" role="img" aria-label="Topologie des brins β d'un domaine V ou C avec positions IMGT"></svg></div>
+      <figcaption><b>Topologie des brins et positions IMGT.</b> Basculez entre V et C. Les brins C′ et C″ (positions 47 à 74 environ) disparaissent dans le domaine C, remplacés par la transition CD (positions 45.1 à 45.9). Les cercles noirs marquent les ancres conservées 23, 41, 104 et 118. Positions des brins du domaine C d'après Lefranc et al., 2005 ; bornes des brins C′/C″ du domaine V indicatives.</figcaption>
+    </figure>
+
+    <div class="callout note"><span class="label">À retenir</span><p>Le type de domaine conditionne la grille de numérotation. Une tête « type de domaine » n'est donc pas une simple étiquette de classification : elle décide quelles positions IMGT sont admissibles pour les autres têtes.</p></div>
+
+    <h2 id="recepteurs"><span class="num">3</span>IG, TR et MH : trois familles de récepteurs</h2>
+    <p>Les récepteurs d'antigène et les molécules de présentation sont des assemblages de domaines. Le schéma ci-dessous montre l'organisation en domaines selon la nomenclature IMGT.</p>
+    <figure class="panel">
+      <div class="scroll-x"><svg id="receptors" viewBox="0 0 760 330" role="img" aria-label="Organisation en domaines des IG, TR et MH"></svg></div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--vcol)"></i>domaine V</span><span><i style="background:var(--ccol)"></i>domaine C ou C-LIKE</span><span><i style="background:var(--gcol)"></i>domaine G</span></div>
+      <figcaption><b>Organisation en domaines.</b> IG (IgG) : chaîne lourde VH, CH1, charnière, CH2, CH3 ; chaîne légère VL (κ ou λ) et CL. TR αβ : V-ALPHA, C-ALPHA ; V-BETA, C-BETA (idem γδ). MH1 : chaîne α avec G-ALPHA1, G-ALPHA2, C-LIKE, associée à la B2M (C-LIKE). MH2 : chaîne α (G-ALPHA, C-LIKE) et chaîne β (G-BETA, C-LIKE). Schéma non à l'échelle.</figcaption>
+    </figure>
+    <p>Pour le projet, cela fixe un vocabulaire de <strong>types de domaines</strong> que DomainGapAlign sait traiter : V-DOMAIN (VH, V-KAPPA, V-LAMBDA, V-ALPHA, V-BETA, V-GAMMA, V-DELTA…), C-DOMAIN (CH1, CH2, CH3, CH4, CL, C-ALPHA…), G-DOMAIN (G-ALPHA1, G-ALPHA2, G-ALPHA, G-BETA), et leurs équivalents -LIKE dans l'IgSF et la MhSF hors IG, TR et MH.</p>
+
+    <h2 id="loci"><span class="num">4</span>Loci et organisation génomique</h2>
+    <p>Chez l'humain, les gènes des IG et des TR sont répartis en sept loci. Chaque locus contient plusieurs types de gènes : V (variable), D (diversité, seulement pour IGH, TRB et TRD), J (jonction) et C (constant).</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Locus</th><th>Chaîne</th><th>Localisation (humain)</th><th>Types de gènes</th></tr></thead>
+        <tbody>
+          <tr><td><code>IGH</code></td><td>lourde des IG</td><td>14q32.33</td><td>V, D, J, C</td></tr>
+          <tr><td><code>IGK</code></td><td>légère κ</td><td>2p11.2</td><td>V, J, C</td></tr>
+          <tr><td><code>IGL</code></td><td>légère λ</td><td>22q11.2</td><td>V, J, C</td></tr>
+          <tr><td><code>TRA</code></td><td>TR α</td><td>14q11.2</td><td>V, J, C</td></tr>
+          <tr><td><code>TRD</code></td><td>TR δ (niché dans TRA)</td><td>14q11.2</td><td>V, D, J, C</td></tr>
+          <tr><td><code>TRB</code></td><td>TR β</td><td>7q34</td><td>V, D, J, C</td></tr>
+          <tr><td><code>TRG</code></td><td>TR γ</td><td>7p14</td><td>V, J, C</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Les gènes du CMH humain (HLA) sont regroupés sur le bras court du chromosome 6 (6p21.3). Ils ne se réarrangent pas ; leur diversité est polymorphique (très nombreux allèles dans la population) et non somatique.</p>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>Le nombre de gènes fonctionnels par locus varie selon l'haplotype (insertions et délétions de blocs de gènes, notamment dans IGH). Les comptes cités plus bas sont des ordres de grandeur. Pour le projet, recalculer les effectifs depuis IMGT/GENE-DB à la date d'extraction et archiver la version.</p></div>
+
+    <h2 id="vdj"><span class="num">5</span>La recombinaison V(D)J, pas à pas</h2>
+    <p>Dans un lymphocyte B ou T en développement, le complexe RAG1/RAG2 coupe l'ADN au niveau de séquences signal (RSS) qui flanquent les gènes V, D et J. La réparation par jonction d'extrémités non homologues rapproche un gène V, éventuellement un gène D, et un gène J. L'ADN intermédiaire est excisé.</p>
+    <div class="vdj-stage">
+      <div class="controls">
+        <button class="btn" type="button" id="vdjPlay">Lecture</button>
+        <button class="btn ghost" type="button" id="vdjPrev">Précédent</button>
+        <button class="btn ghost" type="button" id="vdjNext">Suivant</button>
+        <span class="kbd-hint" id="vdjStep"></span>
+      </div>
+      <div class="scroll-x"><svg id="vdj" class="vdj-svg" viewBox="0 0 760 210" role="img" aria-label="Animation de la recombinaison V(D)J du locus IGH"></svg></div>
+      <div class="vdj-caption" id="vdjCaption" aria-live="polite"></div>
+    </div>
+
+    <h3>La jonction, là où la diversité explose</h3>
+    <p>Aux points de raccord, trois mécanismes modifient la séquence : l'<strong>exonucléase</strong> retire quelques nucléotides aux extrémités des gènes, les <strong>nucléotides P</strong> (palindromiques) apparaissent lors de l'ouverture des épingles d'ADN, et la <strong>TdT</strong> ajoute des <strong>nucléotides N</strong> sans matrice. Ces régions N n'existent dans aucune référence germinale : aucun alignement sur IMGT ne peut les « expliquer ».</p>
+    <p>IMGT définit deux objets proches qu'il ne faut pas confondre :</p>
+    <ul>
+      <li>la <strong>JUNCTION</strong> va de la 2nd-CYS 104 au J-TRP ou J-PHE 118 inclus ;</li>
+      <li>la <strong>CDR3-IMGT</strong> va de 105 à 117 : c'est la jonction sans ses deux ancres. Sa longueur vaut donc celle de la jonction moins 2.</li>
+    </ul>
+    <figure class="panel">
+      <div class="scroll-x"><svg id="junction" viewBox="0 0 760 150" role="img" aria-label="Structure de la jonction : V tronqué, P, N1, D, N2, J"></svg></div>
+      <figcaption><b>Anatomie d'une jonction IGH (illustrative).</b> Les extrémités hachurées sont les nucléotides retirés par l'exonucléase. La CDR3-IMGT commence juste après la 2nd-CYS (104) codée par le gène V et s'arrête juste avant le J-TRP (118) codé par le gène J.</figcaption>
+    </figure>
+
+    <h2 id="diversite"><span class="num">6</span>Chiffrer la diversité</h2>
+    <p>La diversité du répertoire combine trois sources : la <strong>combinatoire</strong> (choix des gènes), la <strong>jonctionnelle</strong> (trimming, P, N) et, pour les IG seulement, l'<strong>hypermutation somatique</strong> (SHM) après stimulation antigénique.</p>
+    <h3>Diversité combinatoire</h3>
+    <p>Si un locus offre \(n_V\) gènes V, \(n_D\) gènes D et \(n_J\) gènes J fonctionnels, le nombre de combinaisons pour la chaîne lourde est</p>
+    <div class="math-block">\[ N_H = n_V \cdot n_D \cdot n_J, \qquad N_L = n_{V\kappa}\, n_{J\kappa} + n_{V\lambda}\, n_{J\lambda}, \qquad N_{H\!L} = N_H \cdot N_L . \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Avec des ordres de grandeur humains : \(n_V \approx 40\), \(n_D \approx 23\), \(n_J = 6\) donnent \(N_H \approx 40 \times 23 \times 6 = 5\,520\). Pour les chaînes légères, \(35 \times 5 + 30 \times 4 = 295\). L'appariement donne \(N_{HL} \approx 5\,520 \times 295 \approx 1{,}6 \times 10^{6}\).</p>
+      <p>Ce chiffre est minuscule devant la diversité réelle, estimée à plus de \(10^{12}\) séquences possibles : l'essentiel vient de la jonction, que la combinatoire ne capture pas.</p>
+    </div>
+    <h3>Cadre de lecture de la jonction</h3>
+    <p>Une recombinaison n'est productive que si la jonction conserve le cadre de lecture entre V et J. Si la longueur de la jonction modulo 3 est à peu près uniforme, la probabilité d'être en phase vaut</p>
+    <div class="math-block">\[ P(\text{en phase}) = P\big(L_{\text{junction}} \equiv r \pmod 3\big) \approx \tfrac{1}{3}. \]</div>
+    <p>Il faut en plus éviter un codon stop. C'est pourquoi les jeux de données de répertoire contiennent des séquences non productives : elles doivent être <strong>filtrées ou étiquetées</strong> avant l'entraînement, sinon le modèle apprend des CDR3 qui ne codent aucune protéine.</p>
+    <h3>Hypermutation somatique et identité au germinal</h3>
+    <p>L'identité d'un domaine muté à son gène germinal le plus proche se calcule sur la V-REGION alignée :</p>
+    <div class="math-block">\[ \text{id} = \frac{\#\{\text{positions IMGT occupées des deux côtés et identiques}\}}{\#\{\text{positions IMGT occupées des deux côtés}\}} . \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Une V-REGION de 98 acides aminés portant 12 substitutions somatiques a une identité de \((98-12)/98 = 87{,}8\,\%\) au germinal. Si deux allèles du même gène ne diffèrent que par un acide aminé, une seule mutation somatique à cette position suffit à inverser l'allèle le plus proche. L'attribution d'allèle sur une séquence mutée est donc intrinsèquement incertaine.</p>
+    </div>
+
+    <h2 id="nomenclature"><span class="num">7</span>Nomenclature IMGT : du locus à l'allèle</h2>
+    <p>Un nom de gène IMGT se lit de gauche à droite, du plus général au plus précis. Exemple : <code>IGHV3-23*01</code> chez <i>Homo sapiens</i>.</p>
+    <ul>
+      <li><code>IGH</code> : le locus (chaîne lourde des IG) ;</li>
+      <li><code>V</code> : le type de gène ;</li>
+      <li><code>3</code> : le sous-groupe (gènes partageant au moins 75 % d'identité nucléotidique) ;</li>
+      <li><code>23</code> : le numéro du gène selon sa position dans le locus ;</li>
+      <li><code>*01</code> : l'allèle.</li>
+    </ul>
+    <p>Quelques formes particulières à connaître :</p>
+    <ul>
+      <li><strong>gène dupliqué</strong> : <code>IGHV3-23D</code> est une copie dupliquée de <code>IGHV3-23</code> ;</li>
+      <li><strong>orphon</strong> : <code>IGHV1/OR15-1</code> est un gène situé hors du locus principal, ici sur le chromosome 15 ;</li>
+      <li><strong>gène partagé</strong> : <code>TRAV29/DV5</code> peut être utilisé par la chaîne α et par la chaîne δ ;</li>
+      <li><strong>piège de nomenclature</strong> : <code>IGHD</code> désigne le gène constant δ, alors que <code>IGHD1-1</code> est un gène de diversité.</li>
+    </ul>
+    <p>IMGT attribue aussi une <strong>fonctionnalité</strong> à chaque gène et allèle : F (fonctionnel), ORF (cadre ouvert mais anomalie, par exemple dans les RSS ou les sites d'épissage), P (pseudogène).</p>
+    <figure class="panel parser">
+      <label for="geneInput" class="kbd-hint">Décomposez un nom de gène IMGT</label>
+      <input type="text" id="geneInput" class="seq-input" value="IGHV3-23*01" spellcheck="false" autocomplete="off">
+      <div class="ex" aria-label="Exemples">
+        <button class="btn ghost" type="button">IGHV3-23D*01</button>
+        <button class="btn ghost" type="button">IGHV1/OR15-1*01</button>
+        <button class="btn ghost" type="button">TRAV29/DV5*01</button>
+        <button class="btn ghost" type="button">IGHD1-1*01</button>
+        <button class="btn ghost" type="button">IGHG1*01</button>
+        <button class="btn ghost" type="button">IGKV1-5*03</button>
+      </div>
+      <div class="out" id="geneOut"></div>
+      <figcaption>Analyseur simplifié, écrit pour ce tutoriel. Il couvre les formes courantes de l'humain et ne remplace pas IMGT/GENE-DB.</figcaption>
+    </figure>
+
+    <h2 id="allele-proteine"><span class="num">8</span>L'allèle au niveau protéique : un piège</h2>
+    <p>Les allèles IMGT sont définis par leur séquence nucléotidique. Deux allèles qui ne diffèrent que par une mutation synonyme codent la même protéine. Une séquence d'acides aminés ne peut donc pas les départager, et DomainGapAlign rapporte alors plusieurs allèles à égalité.</p>
+    <p>Conséquences directes pour le modèle :</p>
+    <ul>
+      <li>la cible de la tête « allèle » est un <strong>ensemble</strong> d'allèles équivalents, pas une classe unique. Il faut construire ces classes d'équivalence protéique en traduisant toutes les références, puis entraîner avec une perte compatible (par exemple une perte de vraisemblance marginalisée sur l'ensemble) ;</li>
+      <li>la métrique doit dire si la prédiction tombe dans l'ensemble des réponses correctes, pas si elle égale une étiquette arbitraire ;</li>
+      <li>sur une séquence mutée, la meilleure réponse honnête est souvent « gène sûr, allèle incertain ». Une tête d'allèle doit être calibrée et pouvoir s'abstenir.</li>
+    </ul>
+    <div class="math-block">\[ \mathcal{L}_{\text{allèle}} = -\log \sum_{a \in \mathcal{A}^{\star}} p_\theta(a \mid x), \qquad \mathcal{A}^{\star} = \{ a : \text{traduction}(a) \text{ la plus proche de } x \}. \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Supposons trois allèles \(a_1, a_2, a_3\) dont \(a_1\) et \(a_2\) ont la même traduction, la plus proche de \(x\). Le modèle prédit \(p = (0{,}45;\,0{,}40;\,0{,}15)\). La perte marginalisée vaut \(-\log(0{,}45 + 0{,}40) = 0{,}163\). Une entropie croisée classique avec \(a_1\) comme seule cible vaudrait \(-\log 0{,}45 = 0{,}799\) et pénaliserait à tort la masse placée sur \(a_2\).</p>
+    </div>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>« Vous annoncez une exactitude d'allèle de 9x %. Sur quel ensemble ? Avec quelle définition de l'égalité ? Combien de séquences de test ont des allèles indiscernables au niveau protéique ? » Prévoir un tableau qui ventile l'exactitude par taille de l'ensemble d'allèles équivalents.</p></div>
+
+    <h2 id="etiquettes"><span class="num">9</span>Ce que cela impose au modèle</h2>
+    <p>Les concepts précédents forment une <strong>hiérarchie</strong> d'étiquettes. Chaque niveau devient une tête du modèle multi-tâche (module 5), et la hiérarchie fournit des contraintes de cohérence : un gène <code>IGHV3-23</code> implique le sous-groupe <code>IGHV3</code>, le locus <code>IGH</code> et un domaine VH.</p>
+    <figure class="panel">
+      <div class="scroll-x"><svg id="hierarchy" viewBox="0 0 760 300" role="img" aria-label="Hiérarchie des étiquettes du niveau séquence au niveau résidu"></svg></div>
+      <figcaption><b>Deux familles de têtes.</b> À gauche, les étiquettes de niveau domaine, emboîtées. À droite, les étiquettes par résidu, définies position par position sur la même séquence.</figcaption>
+    </figure>
+    <p>Trois difficultés statistiques en découlent :</p>
+    <ul>
+      <li><strong>longue traîne</strong> : quelques gènes (et l'humain, la souris) dominent les données, alors que la plupart des gènes et des espèces sont rares ;</li>
+      <li><strong>ensemble ouvert</strong> : IMGT ajoute régulièrement des allèles et des espèces. Une tête de classification à nombre fixe de classes ne peut pas les prédire. Une solution robuste combine un plongement appris et une recherche du plus proche voisin dans la base de référence IMGT, réindexable sans réentraîner ;</li>
+      <li><strong>étiquettes imparfaites</strong> : les annotations de référence proviennent elles-mêmes d'outils (V-QUEST, DomainGapAlign). Il faut tracer leur provenance et leur version.</li>
+    </ul>
+
+    <h2 id="quiz"><span class="num">10</span>Auto-évaluation</h2>
+    <details class="check"><summary>Pourquoi un domaine C n'a-t-il pas de position 60 ?</summary><p>Le domaine C n'a pas de brins C′ et C″ ni de boucle C′C″. Les positions 46 à 76 n'existent donc pas, ainsi que 37 et 38. La transition CD est numérotée 45.1 à 45.9.</p></details>
+    <details class="check"><summary>Une CDR3-IMGT de 15 résidus : quelle est la longueur de la JUNCTION ?</summary><p>17 : la jonction inclut les ancres 104 et 118.</p></details>
+    <details class="check"><summary>Pourquoi un alignement sur les gènes germinaux ne peut-il pas expliquer toute la CDR3 ?</summary><p>Les nucléotides N sont ajoutés sans matrice par la TdT : ils n'existent dans aucune séquence de référence.</p></details>
+    <details class="check"><summary>Que signifie <code>IGHV1/OR15-1</code> ?</summary><p>Un orphon : un gène IGHV du sous-groupe 1 situé hors du locus IGH, sur le chromosome 15.</p></details>
+    <details class="check"><summary>Pourquoi la tête « allèle » ne doit-elle pas utiliser une entropie croisée à cible unique ?</summary><p>Parce que plusieurs allèles peuvent avoir la même traduction. La cible correcte est un ensemble ; on marginalise la probabilité sur cet ensemble.</p></details>
+
+    <h2 id="sources"><span class="num">11</span>Sources</h2>
+    <ol class="sources">
+      <li>Lefranc M-P, et al. IMGT unique numbering for immunoglobulin and T cell receptor variable domains and Ig superfamily V-like domains. <i>Dev Comp Immunol</i> 27:55–77 (2003). <a href="https://imgt.org/PDF/DCI/27_55-77_2003.pdf">PDF IMGT</a></li>
+      <li>Lefranc M-P, et al. IMGT unique numbering for immunoglobulin and T cell receptor constant domains and Ig superfamily C-like domains. <i>Dev Comp Immunol</i> 29:185–203 (2005). <a href="https://imgt.org/PDF/DCI/29_185-203_2005.pdf">PDF IMGT</a></li>
+      <li>Lefranc M-P, et al. IMGT unique numbering for MHC groove G-DOMAIN and MHC superfamily (MhcSF) G-LIKE-DOMAIN. <i>Dev Comp Immunol</i> 29:917–938 (2005). <a href="https://imgt.org/PDF/DCI/29_917-938_2005.pdf">PDF IMGT</a></li>
+      <li>IMGT Scientific chart, définition des FR-IMGT et CDR-IMGT. <a href="https://imgt.org/IMGTScientificChart/Nomenclature/IMGT-FRCDRdefinition.html">imgt.org</a></li>
+      <li>IMGT Scientific chart, numérotation des domaines G. <a href="https://imgt.org/IMGTScientificChart/Numbering/IMGTGsuperfamily.html">imgt.org</a></li>
+      <li>Ehrenmann F, Kaas Q, Lefranc M-P. IMGT/3Dstructure-DB and IMGT/DomainGapAlign: a database and a tool for immunoglobulins or antibodies, T cell receptors, MHC, IgSF and MhcSF. <i>Nucleic Acids Res</i> 38:D301–D307 (2010).</li>
+      <li>Lefranc M-P, Lefranc G. <i>The Immunoglobulin FactsBook</i> et <i>The T Cell Receptor FactsBook</i>. Academic Press (2001).</li>
+    </ol>
+
+    <nav class="pager" aria-label="Navigation entre modules">
+      <a class="prev" href="index.html"><small>Retour</small>Accueil du parcours</a>
+      <a class="next" href="m2.html"><small>Module suivant</small>Numérotation IMGT et exceptions</a>
+    </nav>
+  </main>
+</div>
+
+<script>
+/* ---------- Domain topology (V vs C) ---------- */
+(() => {
+  const root = document.getElementById("topo");
+  const strandsV = [
+    { name: "A", from: 1, to: 15 }, { name: "B", from: 16, to: 26 }, { name: "BC · CDR1", from: 27, to: 38, loop: "cdr1" },
+    { name: "C", from: 39, to: 46 }, { name: "C′", from: 47, to: 55 }, { name: "C′C″ · CDR2", from: 56, to: 65, loop: "cdr2" },
+    { name: "C″", from: 66, to: 74 }, { name: "D", from: 75, to: 84 }, { name: "E", from: 85, to: 96 },
+    { name: "F", from: 97, to: 104 }, { name: "FG · CDR3", from: 105, to: 117, loop: "cdr3" }, { name: "G", from: 118, to: 128 }
+  ];
+  const strandsC = [
+    { name: "A", from: 1, to: 15 }, { name: "AB", from: 15.1, to: 15.3, ins: true }, { name: "B", from: 16, to: 26 },
+    { name: "BC", from: 27, to: 36, loop: "loop" }, { name: "C", from: 39, to: 45 }, { name: "CD", from: 45.1, to: 45.9, ins: true },
+    { name: "D", from: 77, to: 84 }, { name: "DE", from: 84.1, to: 85.1, ins: true }, { name: "E", from: 85, to: 96 },
+    { name: "F", from: 97, to: 104 }, { name: "FG", from: 105, to: 117, loop: "loop" }, { name: "G", from: 118, to: 128 }
+  ];
+  const anchors = [23, 41, 104, 118];
+  let mode = "V";
+  const X = (p) => 30 + (Math.floor(p) - 1) / 127 * 660;
+  function draw() {
+    root.innerHTML = "";
+    // axis
+    PA.svg("line", { x1: 30, x2: 690, y1: 200, y2: 200, stroke: "var(--rule)", "stroke-width": 1 }, root);
+    [1, 26, 38, 55, 65, 76, 104, 117, 128].forEach((p) => {
+      PA.svg("line", { x1: X(p), x2: X(p), y1: 196, y2: 204, stroke: "var(--muted)" }, root);
+      PA.svg("text", { x: X(p), y: 220, "text-anchor": "middle", "font-size": 11, class: "svg-muted", text: p }, root);
+    });
+    PA.svg("text", { x: 30, y: 242, "font-size": 11, class: "svg-muted", text: "position IMGT (axe linéaire, insertions non à l'échelle)" }, root);
+    const list = mode === "V" ? strandsV : strandsC;
+    list.forEach((s, i) => {
+      const x1 = X(s.from), x2 = s.ins ? X(s.from) + 14 : X(s.to);
+      const lane = s.loop ? 40 : s.ins ? 150 : 95;
+      const color = s.loop === "cdr1" ? "var(--cdr1)" : s.loop === "cdr2" ? "var(--cdr2)" : s.loop === "cdr3" ? "var(--cdr3)" : s.loop ? "var(--muted)" : s.ins ? "var(--ccol)" : (mode === "V" ? "var(--vcol)" : "var(--ccol)");
+      if (s.loop) {
+        PA.svg("path", { d: `M ${x1} ${lane + 30} Q ${(x1 + x2) / 2} ${lane - 25} ${x2} ${lane + 30}`, fill: "none", stroke: color, "stroke-width": 4, "stroke-linecap": "round" }, root);
+      } else {
+        PA.svg("rect", { x: x1, y: lane, width: Math.max(10, x2 - x1), height: 18, rx: 3, fill: color, opacity: s.ins ? 0.9 : 1 }, root);
+        PA.svg("path", { d: `M ${Math.max(x1 + 10, x2)} ${lane - 3} l 8 12 l -8 12 z`, fill: color }, root);
+      }
+      PA.svg("text", { x: (x1 + Math.max(x1 + 10, x2)) / 2, y: s.loop ? lane - 2 : lane - 6, "text-anchor": "middle", "font-size": 11.5, "font-weight": 700, class: "svg-text", text: s.name }, root);
+    });
+    if (mode === "C") {
+      PA.svg("rect", { x: X(46), y: 88, width: X(76) - X(46), height: 32, fill: "none", stroke: "var(--crit)", "stroke-dasharray": "4 3", rx: 4 }, root);
+      PA.svg("text", { x: (X(46) + X(76)) / 2, y: 135, "text-anchor": "middle", "font-size": 11, fill: "var(--crit)", "font-family": "var(--f-body)", text: "46–76 absentes" }, root);
+    }
+    anchors.forEach((p) => {
+      PA.svg("circle", { cx: X(p), cy: 200, r: 5, fill: "var(--ink)" }, root);
+    });
+  }
+  const bV = document.getElementById("topoV"), bC = document.getElementById("topoC");
+  bV.addEventListener("click", () => { mode = "V"; bV.setAttribute("aria-pressed", "true"); bC.setAttribute("aria-pressed", "false"); draw(); });
+  bC.addEventListener("click", () => { mode = "C"; bC.setAttribute("aria-pressed", "true"); bV.setAttribute("aria-pressed", "false"); draw(); });
+  draw();
+})();
+
+/* ---------- Receptor domain organisation ---------- */
+(() => {
+  const root = document.getElementById("receptors");
+  const dom = (x, y, w, h, kind, label) => {
+    const col = kind === "V" ? "var(--vcol)" : kind === "C" ? "var(--ccol)" : "var(--gcol)";
+    PA.svg("rect", { x, y, width: w, height: h, rx: 14, fill: col, opacity: 0.92 }, root);
+    PA.svg("text", { x: x + w / 2, y: y + h / 2 + 4, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "var(--paper)", "font-family": "var(--f-body)", text: label }, root);
+  };
+  const title = (x, txt) => PA.svg("text", { x, y: 22, "text-anchor": "middle", "font-size": 14, "font-weight": 700, class: "svg-text", text: txt }, root);
+  const membrane = () => PA.svg("rect", { x: 300, y: 296, width: 450, height: 12, fill: "var(--rule)" }, root);
+  // IG: IgG (one heavy + one light shown as an arm, plus Fc)
+  title(130, "IG (IgG)");
+  dom(60, 40, 60, 38, "V", "VL"); dom(60, 84, 60, 38, "C", "CL");
+  dom(126, 40, 60, 38, "V", "VH"); dom(126, 84, 60, 38, "C", "CH1");
+  PA.svg("path", { d: "M 156 124 L 156 150", stroke: "var(--muted)", "stroke-width": 3 }, root);
+  PA.svg("text", { x: 164, y: 142, "font-size": 10.5, class: "svg-muted", text: "charnière" }, root);
+  dom(126, 152, 60, 38, "C", "CH2"); dom(126, 196, 60, 38, "C", "CH3");
+  dom(192, 152, 60, 38, "C", "CH2"); dom(192, 196, 60, 38, "C", "CH3");
+  PA.svg("text", { x: 130, y: 262, "text-anchor": "middle", "font-size": 10.5, class: "svg-muted", text: "1 bras Fab + Fc (2e bras omis)" }, root);
+  // TR
+  title(380, "TR αβ");
+  dom(320, 120, 58, 38, "V", "V-α"); dom(320, 164, 58, 38, "C", "C-α");
+  dom(384, 120, 58, 38, "V", "V-β"); dom(384, 164, 58, 38, "C", "C-β");
+  PA.svg("path", { d: "M 349 204 L 349 296 M 413 204 L 413 296", stroke: "var(--muted)", "stroke-width": 3 }, root);
+  // MH1
+  title(530, "MH1");
+  dom(480, 90, 60, 38, "G", "G-α1"); dom(546, 90, 60, 38, "G", "G-α2");
+  dom(513, 160, 60, 38, "C", "C-LIKE"); dom(579, 200, 50, 34, "C", "B2M");
+  PA.svg("path", { d: "M 543 200 L 543 296", stroke: "var(--muted)", "stroke-width": 3 }, root);
+  // MH2
+  title(690, "MH2");
+  dom(640, 90, 54, 38, "G", "G-α"); dom(698, 90, 54, 38, "G", "G-β");
+  dom(640, 160, 54, 38, "C", "C-LIKE"); dom(698, 160, 54, 38, "C", "C-LIKE");
+  PA.svg("path", { d: "M 667 200 L 667 296 M 725 200 L 725 296", stroke: "var(--muted)", "stroke-width": 3 }, root);
+  membrane();
+  PA.svg("text", { x: 305, y: 322, "font-size": 10.5, class: "svg-muted", text: "membrane" }, root);
+})();
+
+/* ---------- V(D)J recombination animation ---------- */
+(() => {
+  const root = document.getElementById("vdj");
+  const cap = document.getElementById("vdjCaption");
+  // Segment model: id, kind, label, germline x, width
+  const segs = [];
+  const add = (id, kind, label, x, w) => segs.push({ id, kind, label, x, w });
+  ["V1", "V2", "V3", "V4", "V5"].forEach((v, i) => add(v, "V", v, 20 + i * 62, 50));
+  ["D1", "D2", "D3", "D4"].forEach((d, i) => add(d, "D", d, 350 + i * 34, 22));
+  ["J1", "J2", "J3", "J4"].forEach((j, i) => add(j, "J", j, 500 + i * 26, 18));
+  add("Cm", "C", "Cμ", 640, 44); add("Cd", "C", "Cδ", 694, 44);
+  const color = { V: "var(--vcol)", D: "var(--cdr2)", J: "var(--cdr3)", C: "var(--ccol)" };
+  const nodes = {};
+  PA.svg("line", { id: "dna", x1: 10, x2: 750, y1: 70, y2: 70, stroke: "var(--muted)", "stroke-width": 2 }, root);
+  segs.forEach((s) => {
+    const g = PA.svg("g", { class: "seg", style: `transform: translate(${s.x}px, 58px)` }, root);
+    PA.svg("rect", { width: s.w, height: 24, rx: 3, fill: color[s.kind] }, g);
+    PA.svg("text", { x: s.w / 2, y: 16, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "var(--paper)", "font-family": "var(--f-body)", text: s.label }, g);
+    nodes[s.id] = g;
+  });
+  const circle = PA.svg("g", { class: "seg", style: "transform: translate(420px, 150px); opacity: 0" }, root);
+  PA.svg("ellipse", { cx: 0, cy: 0, rx: 46, ry: 18, fill: "none", stroke: "var(--muted)", "stroke-width": 2, "stroke-dasharray": "5 4" }, circle);
+  PA.svg("text", { x: 0, y: 4, "text-anchor": "middle", "font-size": 10.5, class: "svg-muted", text: "ADN excisé" }, circle);
+  const lbl = PA.svg("text", { x: 20, y: 30, "font-size": 13, "font-weight": 700, class: "svg-text" }, root);
+  const regionBar = PA.svg("g", { class: "seg", style: "opacity: 0; transform: translate(0px, 120px)" }, root);
+  const regs = [["FR1", 0, 60, "--fr"], ["CDR1", 60, 30, "--cdr1"], ["FR2", 90, 44, "--fr"], ["CDR2", 134, 28, "--cdr2"], ["FR3", 162, 96, "--fr"], ["CDR3", 258, 46, "--cdr3"], ["FR4", 304, 30, "--fr"]];
+  regs.forEach(([n, x, w, c]) => {
+    PA.svg("rect", { x: 200 + x, y: 0, width: w, height: 20, fill: `var(${c})` }, regionBar);
+    PA.svg("text", { x: 200 + x + w / 2, y: 36, "text-anchor": "middle", "font-size": 10.5, class: "svg-text", text: n }, regionBar);
+  });
+  PA.svg("text", { x: 200, y: 56, "font-size": 10.5, class: "svg-muted", text: "V-REGION → FR1…FR3 + début CDR3 · D + N dans la CDR3 · J-REGION → fin CDR3 + FR4" }, regionBar);
+
+  const place = (id, x, y = 58, op = 1) => { nodes[id].style.transform = `translate(${x}px, ${y}px)`; nodes[id].style.opacity = op; };
+  const steps = [
+    { t: "Locus IGH germinal", c: "<b>Configuration germinale.</b> Le locus IGH aligne des dizaines de gènes V, une vingtaine de gènes D, six gènes J puis les gènes constants. Ici, une version réduite.", f: () => { segs.forEach((s) => place(s.id, s.x)); circle.style.opacity = 0; regionBar.style.opacity = 0; } },
+    { t: "Choix de D2 et J3", c: "<b>Première étape : D vers J.</b> RAG1/RAG2 coupe au niveau des RSS qui flanquent D2 et J3. Les gènes situés entre eux vont être excisés.", f: () => { segs.forEach((s) => place(s.id, s.x, 58, ["D3", "D4", "J1", "J2"].includes(s.id) ? 0.35 : 1)); } },
+    { t: "Jonction D-J", c: "<b>D2 est joint à J3.</b> L'ADN intermédiaire forme un cercle excisé, perdu lors des divisions. La jonction D-J reçoit déjà trimming et nucléotides N.", f: () => { place("D3", 420, 140, 0); place("D4", 440, 140, 0); place("J1", 450, 140, 0); place("J2", 460, 140, 0); place("D2", 528); circle.style.opacity = 1; } },
+    { t: "Choix de V4", c: "<b>Deuxième étape : V vers DJ.</b> Un gène V, ici V4, est choisi. Tout ce qui le sépare de D2J3 sera excisé.", f: () => { place("V5", 268, 58, 0.35); place("D1", 350, 58, 0.35); circle.style.opacity = 0.2; } },
+    { t: "Jonction V-DJ", c: "<b>V4 est joint à D2J3.</b> Le réarrangement VDJ est maintenant figé dans l'ADN de cette cellule et de ses descendantes.", f: () => { place("V5", 420, 140, 0); place("D1", 420, 140, 0); place("V4", 476); circle.style.opacity = 1; } },
+    { t: "Transcription et épissage", c: "<b>ARNm.</b> Le transcrit VDJ-Cμ est épissé : l'intron entre J et C disparaît. J4 et Cδ restent hors de l'ARNm mature (Cδ peut être utilisé par épissage alternatif).", f: () => { place("J4", 578, 104, 0.3); place("Cm", 574); place("Cd", 694, 58, 0.3); circle.style.opacity = 0; regionBar.style.opacity = 0; } },
+    { t: "Domaine V protéique", c: "<b>V-DOMAIN.</b> Le gène V code FR1 à FR3 et le début de la CDR3, le gène J la fin de la CDR3 et FR4. La CDR3 contient V, N, D, N et J : c'est la région qu'aucune référence ne couvre entièrement.", f: () => { regionBar.style.opacity = 1; } }
+  ];
+  const stepLabel = document.getElementById("vdjStep");
+  PA.stepper({
+    nSteps: steps.length,
+    render: (k) => {
+      // replay all previous steps to make navigation idempotent
+      for (let i = 0; i <= k; i++) steps[i].f();
+      lbl.textContent = steps[k].t;
+      cap.innerHTML = steps[k].c;
+    },
+    playBtn: document.getElementById("vdjPlay"),
+    prevBtn: document.getElementById("vdjPrev"),
+    nextBtn: document.getElementById("vdjNext"),
+    label: stepLabel,
+    interval: 2600
+  });
+})();
+
+/* ---------- Junction anatomy ---------- */
+(() => {
+  const root = document.getElementById("junction");
+  const parts = [
+    { n: "V", w: 170, c: "--vcol", trim: 18 }, { n: "P", w: 16, c: "--muted" }, { n: "N1", w: 60, c: "--fr" },
+    { n: "D", w: 70, c: "--cdr2", trimL: 12, trim: 10 }, { n: "N2", w: 40, c: "--fr" }, { n: "J", w: 170, c: "--cdr3", trimL: 16 }
+  ];
+  let x = 20;
+  const y = 40;
+  const defs = PA.svg("defs", {}, root);
+  const pat = PA.svg("pattern", { id: "hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+  PA.svg("rect", { width: 6, height: 6, fill: "var(--panel)" }, pat);
+  PA.svg("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: "var(--muted)", "stroke-width": 2 }, pat);
+  const xs = {};
+  parts.forEach((p) => {
+    if (p.trimL) { PA.svg("rect", { x, y, width: p.trimL, height: 26, fill: "url(#hatch)", stroke: "var(--rule)" }, root); x += p.trimL; }
+    PA.svg("rect", { x, y, width: p.w, height: 26, fill: `var(${p.c})` }, root);
+    PA.svg("text", { x: x + p.w / 2, y: y + 17, "text-anchor": "middle", "font-size": 11.5, "font-weight": 700, fill: p.c === "--fr" || p.c === "--muted" ? "var(--ink)" : "var(--paper)", "font-family": "var(--f-body)", text: p.n }, root);
+    xs[p.n] = [x, x + p.w];
+    x += p.w;
+    if (p.trim) { PA.svg("rect", { x, y, width: p.trim, height: 26, fill: "url(#hatch)", stroke: "var(--rule)" }, root); x += p.trim; }
+  });
+  // anchors: 104 near end of V, 118 near start of J
+  const a104 = xs.V[1] - 12, a118 = xs.J[0] + 10;
+  [[a104, "104 Cys"], [a118, "118 Trp"]].forEach(([ax, t]) => {
+    PA.svg("line", { x1: ax, x2: ax, y1: y - 8, y2: y + 34, stroke: "var(--ink)", "stroke-width": 2 }, root);
+    PA.svg("text", { x: ax, y: y - 12, "text-anchor": "middle", "font-size": 10.5, class: "svg-text", text: t }, root);
+  });
+  const br = (x1, x2, yy, t) => {
+    PA.svg("path", { d: `M ${x1} ${yy} v 6 H ${x2} v -6`, fill: "none", stroke: "var(--ink-2)", "stroke-width": 1.4 }, root);
+    PA.svg("text", { x: (x1 + x2) / 2, y: yy + 22, "text-anchor": "middle", "font-size": 11, class: "svg-text", text: t }, root);
+  };
+  br(a104, a118, 78, "JUNCTION (104 → 118 inclus)");
+  br(a104 + 6, a118 - 6, 108, "CDR3-IMGT (105 → 117)");
+})();
+
+/* ---------- Gene name parser ---------- */
+(() => {
+  const input = document.getElementById("geneInput");
+  const out = document.getElementById("geneOut");
+  const LOCI = { IGH: "chaîne lourde IG", IGK: "chaîne légère κ", IGL: "chaîne légère λ", TRA: "TR α", TRB: "TR β", TRG: "TR γ", TRD: "TR δ" };
+  const CONST_H = { M: "μ", D: "δ", G: "γ", A: "α", E: "ε" };
+  function parse(name) {
+    const s = name.trim().toUpperCase();
+    const res = [];
+    let m = s.match(/^(IG[HKL]|TR[ABGD])(.*)$/);
+    if (!m) return [["Erreur", "Préfixe de locus inconnu (IGH, IGK, IGL, TRA, TRB, TRG, TRD)"]];
+    const locus = m[1];
+    let rest = m[2];
+    res.push(["Locus", `${locus} · ${LOCI[locus]}`]);
+    let allele = null;
+    const am = rest.match(/\*(\d+)$/);
+    if (am) { allele = am[1]; rest = rest.slice(0, am.index); }
+    // Constant genes of IGH: IGHM, IGHD, IGHG1, IGHA2, IGHE ; IGKC, IGLC2, TRAC, TRBC1...
+    let cm = rest.match(/^C(\d*)$/);
+    let hm = locus === "IGH" ? rest.match(/^([MDGAE])(\d*)$/) : null;
+    if (cm || hm) {
+      res.push(["Type de gène", "C (constant)"]);
+      if (hm) res.push(["Isotype", `${CONST_H[hm[1]]}${hm[2] ? " · sous-classe " + hm[2] : ""}`]);
+      else if (cm[1]) res.push(["Numéro", cm[1]]);
+      if (hm && hm[1] === "D" && !hm[2]) res.push(["Attention", "IGHD = gène constant δ, pas un gène D de diversité"]);
+    } else {
+      const gm = rest.match(/^([VDJ])(\d+)?(?:\/(OR\d+|DV\d+))?(?:-(\d+))?(D)?$/);
+      if (!gm) return res.concat([["Erreur", "Forme non reconnue par cet analyseur simplifié"]]);
+      res.push(["Type de gène", { V: "V (variable)", D: "D (diversité)", J: "J (jonction)" }[gm[1]]]);
+      if (gm[2]) res.push([gm[1] === "V" || gm[4] ? "Sous-groupe" : "Numéro du gène", gm[2]]);
+      if (gm[3] && gm[3].startsWith("OR")) res.push(["Orphon", `hors locus, chromosome ${gm[3].slice(2)}`]);
+      if (gm[3] && gm[3].startsWith("DV")) res.push(["Gène partagé", `aussi utilisable comme TRDV${gm[3].slice(2)}`]);
+      if (gm[4]) res.push(["Numéro du gène", gm[4]]);
+      if (gm[5]) res.push(["Duplication", "copie dupliquée (suffixe D)"]);
+    }
+    res.push(["Allèle", allele ? "*" + allele : "non précisé"]);
+    return res;
+  }
+  function render() {
+    out.innerHTML = "";
+    parse(input.value).forEach(([k, v]) => {
+      const c = PA.html("div", { class: "cell" }, out);
+      PA.html("small", { text: k }, c);
+      PA.html("span", { text: v }, c);
+    });
+  }
+  input.addEventListener("input", render);
+  document.querySelectorAll(".parser .ex button").forEach((b) => b.addEventListener("click", () => { input.value = b.textContent; render(); }));
+  render();
+})();
+
+/* ---------- Label hierarchy ---------- */
+(() => {
+  const root = document.getElementById("hierarchy");
+  const levels = [
+    ["Espèce", "Homo sapiens"], ["Récepteur · locus", "IG · IGH"], ["Type de domaine", "V-DOMAIN (VH)"],
+    ["Sous-groupe", "IGHV3"], ["Gène", "IGHV3-23"], ["Allèles (ensemble)", "{*01, *04}"]
+  ];
+  levels.forEach(([k, v], i) => {
+    const y = 20 + i * 46;
+    const x = 20 + i * 18;
+    PA.svg("rect", { x, y, width: 300 - i * 18, height: 34, rx: 4, fill: "var(--paper-2)", stroke: "var(--rule)" }, root);
+    PA.svg("text", { x: x + 10, y: y + 14, "font-size": 10, class: "svg-muted", text: k.toUpperCase() }, root);
+    PA.svg("text", { x: x + 10, y: y + 28, "font-size": 12.5, "font-weight": 700, class: "svg-mono", text: v }, root);
+    if (i > 0) PA.svg("path", { d: `M ${x - 8} ${y - 12} v 20 h 8`, fill: "none", stroke: "var(--muted)" }, root);
+  });
+  PA.svg("text", { x: 20, y: 296, "font-size": 10.5, class: "svg-muted", text: "Ensemble d'allèles : exemple illustratif, pas une équivalence vérifiée." }, root);
+  // per-residue labels
+  const seq = "EVQLVESGG-GLVQPGGSLRLSCAASGFNI----KDTY";
+  const reg = (i) => (i < 26 ? "FR1" : "CDR1");
+  const x0 = 340, y0 = 40;
+  PA.svg("text", { x: x0, y: 22, "font-size": 12, "font-weight": 700, class: "svg-text", text: "Étiquettes par résidu (début du VH)" }, root);
+  const rows = [["résidu", (c) => c], ["position", (c, p) => String(p)], ["région", (c, p) => reg(p - 1) === "FR1" ? "F1" : "C1"], ["segment", () => "V"]];
+  const shown = [];
+  for (let p = 1, k = 0; p <= 38 && shown.length < 14; p++) { if (p >= 20) shown.push([seq[p - 1], p]); }
+  rows.forEach(([name, fn], r) => {
+    PA.svg("text", { x: x0, y: y0 + 22 + r * 34, "font-size": 10, class: "svg-muted", text: name.toUpperCase() }, root);
+    shown.forEach(([c, p], j) => {
+      const xx = x0 + 70 + j * 24;
+      const val = fn(c, p);
+      const isGap = c === "-";
+      const fill = r === 2 ? (val === "C1" ? "var(--cdr1)" : "var(--fr)") : "var(--paper-2)";
+      PA.svg("rect", { x: xx, y: y0 + 8 + r * 34, width: 21, height: 22, rx: 3, fill: isGap ? "none" : fill, stroke: isGap ? "var(--muted)" : "none", "stroke-dasharray": isGap ? "2 2" : "" }, root);
+      PA.svg("text", { x: xx + 10.5, y: y0 + 23 + r * 34, "text-anchor": "middle", "font-size": r === 1 ? 8.5 : 10, class: "svg-mono", fill: r === 2 && val === "C1" ? "var(--paper)" : "var(--ink)", text: isGap && r !== 1 ? "·" : val }, root);
+    });
+  });
+  PA.svg("text", { x: x0, y: y0 + 170, "font-size": 10.5, class: "svg-muted", text: "Les gaps (pointillés) n'ont pas de résidu : la tête de position" }, root);
+  PA.svg("text", { x: x0, y: y0 + 184, "font-size": 10.5, class: "svg-muted", text: "ne prédit que des positions occupées, dans l'ordre croissant." }, root);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MLM : DAPT puis TAPT</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.js"></script>
+<style>
+  .tokens { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
+  @media (max-width: 700px) { .tokens { grid-template-columns: repeat(15, minmax(0, 1fr)); } }
+  .tok { font-family: var(--f-mono); font-size: .74rem; text-align: center; padding: 4px 0; border-radius: 3px; background: var(--paper-2); color: var(--ink-2); border: 1.5px solid transparent; cursor: default; transition: background .25s, color .25s, border-color .25s; }
+  .tok.cdr1 { box-shadow: inset 0 -3px 0 var(--cdr1); }
+  .tok.cdr2 { box-shadow: inset 0 -3px 0 var(--cdr2); }
+  .tok.cdr3 { box-shadow: inset 0 -3px 0 var(--cdr3); }
+  .tok.m { background: var(--ink); color: var(--paper); cursor: pointer; }
+  .tok.r { border-color: var(--cdr2); color: var(--cdr2); font-weight: 700; cursor: pointer; }
+  .tok.k { border-color: var(--accent); cursor: pointer; }
+  .tok.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .pred { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+  @media (max-width: 680px) { .pred { grid-template-columns: minmax(0, 1fr); } }
+  .bars { display: grid; gap: 4px; }
+  .bar { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) 3.4em; gap: 8px; align-items: center; font-family: var(--f-mono); font-size: .8rem; }
+  .bar .track { height: 12px; background: var(--paper-2); border-radius: 2px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--accent); transition: width .4s; }
+  .bar.true .fill { background: var(--ok); }
+  .bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .rates { font-size: var(--s-0); }
+  .models td:nth-child(2), .models td:nth-child(3) { white-space: nowrap; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Module 4 sur 6</span>
+    <nav aria-label="Modules">
+      <a href="index.html">Accueil</a>
+      <a href="m1.html">1</a><a href="m2.html">2</a><a href="m3.html">3</a><a href="m4.html" aria-current="page">4</a><a href="m5.html">5</a><a href="m6.html">6</a>
+    </nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="toc" aria-label="Sommaire"><h2>Sommaire</h2><ol></ol></aside>
+  <main class="article">
+    <p class="eyebrow">Module 4 · Pré-entraînement</p>
+    <h1>Modèles de langage protéiques et MLM : DAPT puis TAPT</h1>
+    <p class="lede">Un modèle de langage protéique générique sait beaucoup de choses sur les protéines, peu sur la numérotation IMGT. Le pré-entraînement adaptatif par masquage lui fait absorber la distribution des séquences IG, TR, MH et IgSF avant qu'on lui demande d'annoter.</p>
+    <p class="meta-row"><span><b>Durée</b> 90 min</span><span><b>Prérequis</b> modules 1 à 3, bases de PyTorch</span><span><b>Code</b> <code>protannotml.data.masking</code></span></p>
+
+    <h2 id="transformer"><span class="num">1</span>Le Transformer en une page</h2>
+    <p>Un PLM encodeur (ESM-2, ESM C, ProtT5 côté encodeur, AbLang-2) lit une séquence \(x_1 \dots x_L\) d'acides aminés, un jeton par résidu. Chaque jeton reçoit un plongement \(e(x_i) \in \mathbb{R}^d\), puis \(N\) couches d'attention le transforment en une représentation contextuelle \(h_i\). C'est ce \(h_i\) qu'utiliseront toutes les têtes d'annotation par résidu.</p>
+    <p>Le cœur d'une couche est l'auto-attention. Avec \(H \in \mathbb{R}^{L \times d}\) et des projections apprises \(W_Q, W_K, W_V\) :</p>
+    <div class="math-block">\[ Q = H W_Q,\quad K = H W_K,\quad V = H W_V, \qquad \operatorname{Attn}(H) = \operatorname{softmax}\!\Big(\frac{Q K^\top}{\sqrt{d_k}}\Big) V . \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Trois jetons, \(d_k = 2\). La requête du jeton 1 est \(q_1 = (1, 0)\) ; les clés sont \(k_1 = (1, 0)\), \(k_2 = (0, 1)\), \(k_3 = (2, 0)\). Les scores \(q_1 \cdot k_j / \sqrt 2\) valent \((0{,}707;\ 0;\ 1{,}414)\). Après softmax : \((0{,}284;\ 0{,}140;\ 0{,}576)\). Le jeton 1 lit surtout le jeton 3. Dans un domaine V, ce mécanisme permet à une position de la FR3 de « regarder » la 2nd-CYS 104 ou le motif J-TRP-GLY 118–119, quelle que soit la longueur de la CDR3 qui les sépare.</p>
+    </div>
+    <p>Point essentiel pour l'annotation : un jeton par résidu. Un modèle à tokens BPE ou à k-mères obligerait à réaligner les étiquettes ; ESM-2, ESM C, ProtT5 et les modèles anticorps cités ici tokenisent résidu par résidu.</p>
+
+    <h2 id="choisir"><span class="num">2</span>Choisir le modèle de base</h2>
+    <p>Le choix doit se trancher par ablation, pas par réputation. Voici les candidats et ce qu'il faut vérifier au moment de l'expérience.</p>
+    <div class="table-wrap models">
+      <table>
+        <thead><tr><th>Modèle</th><th>Tailles</th><th>Données</th><th>Atouts et limites pour ce projet</th></tr></thead>
+        <tbody>
+          <tr><td>ESM-2</td><td>8M à 15B</td><td>UniRef</td><td>Référence très utilisée, poids ouverts, nombreux articles de comparaison.</td></tr>
+          <tr><td>ESM C</td><td>300M, 600M, 6B</td><td>UniRef, MGnify, JGI</td><td>Poids publiés sur Hugging Face sous l'organisation Biohub, y compris le 6B ; licence affichée ambiguë (MIT et « other ») : à clarifier.</td></tr>
+          <tr><td>ProtT5-XL-U50</td><td>3B (encodeur ~1,2B)</td><td>BFD, UniRef50</td><td>Encodeur T5 performant en annotation par résidu ; plus lent.</td></tr>
+          <tr><td>SaProt</td><td>35M, 650M</td><td>séquence + jetons de structure Foldseek</td><td>Demande une structure (prédite) en entrée : coûteux et source d'erreurs pour un outil de séquence.</td></tr>
+          <tr><td>AbLang-2</td><td>petit</td><td>OAS, anticorps appariés et non appariés</td><td>Spécialisé anticorps, corrige le biais germinal ; ne couvre ni TR ni MH, et surtout humain et souris.</td></tr>
+          <tr><td>AntiBERTy, IgBert, IgT5</td><td>~26M à 3B</td><td>OAS</td><td>Mêmes atouts et limites : anticorps humains et murins seulement.</td></tr>
+          <tr><td>IgLM</td><td>~13M</td><td>anticorps</td><td>Génératif (remplissage), conditionné par espèce et chaîne ; moins adapté à l'encodage par résidu.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>Un modèle anticorps entraîné sur l'humain et la souris aura l'air excellent sur un test dominé par l'humain et la souris. Le choix du modèle de base doit être jugé sur les couches de test difficiles du module 3 (espèces et loci tenus à l'écart), et comparé à la même architecture initialisée au hasard, pour isoler l'apport du pré-entraînement générique.</p></div>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>Versions, licences et tailles évoluent vite. Au lancement des expériences, relever pour chaque modèle : identifiant exact sur Hugging Face, commit des poids, licence, date de gel des données d'entraînement (nécessaire au hold-out temporel du module 3).</p></div>
+
+    <h2 id="mlm"><span class="num">3</span>La perte MLM, pas à pas</h2>
+    <p>On choisit un sous-ensemble \(\mathcal{M}\) de positions (environ 15 %), on corrompt l'entrée en \(\tilde{x}\), et le modèle doit retrouver les résidus d'origine :</p>
+    <div class="math-block">\[ \mathcal{L}_{\text{MLM}}(\theta) = -\frac{1}{|\mathcal{M}|} \sum_{i \in \mathcal{M}} \log p_\theta\big(x_i \mid \tilde{x}\big), \qquad p_\theta(a \mid \tilde x) = \frac{\exp(z_{i,a})}{\sum_{b} \exp(z_{i,b})} . \]</div>
+    <p>La corruption suit la règle de BERT : parmi les positions choisies, 80 % reçoivent le jeton <code>&lt;mask&gt;</code>, 10 % un acide aminé aléatoire, 10 % restent inchangées. Sans ces 20 %, le modèle n'apprendrait à bien représenter que les positions masquées, alors qu'en aval il ne verra jamais de masque.</p>
+    <p>La <strong>perplexité</strong> \(\mathrm{PPL} = \exp(\mathcal{L}_{\text{MLM}})\) se lit comme un nombre effectif de candidats. Un modèle qui ne sait rien prédit 20 acides aminés équiprobables : \(\mathcal{L} = \ln 20 = 2{,}996\), \(\mathrm{PPL} = 20\).</p>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>La 1st-CYS 23 du trastuzumab est masquée. Le modèle donne les logits \(z_C = 4\), \(z_S = 1\), \(z_A = 0{,}5\) et \(z = 0\) pour les 17 autres. La somme des exponentielles vaut \(e^4 + e^1 + e^{0{,}5} + 17 = 54{,}60 + 2{,}72 + 1{,}65 + 17 = 75{,}97\). Donc \(p(C) = 0{,}719\) et la contribution à la perte est \(-\ln 0{,}719 = 0{,}330\). Dans une CDR3 où le modèle hésite entre huit résidus à 0,1 chacun, la contribution est \(-\ln 0{,}1 = 2{,}303\) : la CDR3 domine la perte, ce qui motive l'analyse par région.</p>
+    </div>
+
+    <figure class="panel">
+      <div class="controls">
+        <label for="strategy">Stratégie
+          <select id="strategy">
+            <option value="uniform">Uniforme, 15 %</option>
+            <option value="pref" selected>Préférentielle CDR3 (25 %), 15 % en moyenne</option>
+            <option value="span">Par segments, longueur moyenne 3</option>
+          </select>
+        </label>
+        <button class="btn" type="button" id="remask">Nouveau masquage</button>
+        <span class="kbd-hint">Touchez un jeton corrompu pour voir la prédiction.</span>
+      </div>
+      <div class="tokens" id="tokens" aria-label="Séquence VH tokenisée"></div>
+      <div class="legend" style="margin-top:10px"><span><i style="background:var(--ink);border-radius:2px"></i>&lt;mask&gt; (80 %)</span><span><i style="border:1.5px solid var(--cdr2);border-radius:2px"></i>aléatoire (10 %)</span><span><i style="border:1.5px solid var(--accent);border-radius:2px"></i>inchangé mais à prédire (10 %)</span><span><i style="box-shadow: inset 0 -3px 0 var(--cdr3);border-radius:2px;background:var(--paper-2)"></i>soulignement : CDR</span></div>
+      <div class="pred">
+        <div>
+          <div class="rates" id="rates"></div>
+        </div>
+        <div>
+          <div class="kbd-hint" id="predHead">Aucun jeton sélectionné.</div>
+          <div class="bars" id="bars"></div>
+        </div>
+      </div>
+      <figcaption><b>Masquage d'un VH (trastuzumab).</b> Les taux réalisés fluctuent autour des taux attendus. Les probabilités de prédiction sont <b>simulées</b> pour illustrer le calcul de la perte : un vrai modèle donnerait d'autres valeurs.</figcaption>
+    </figure>
+
+    <h2 id="strategies"><span class="num">4</span>Stratégies de masquage</h2>
+    <p>Trois stratégies méritent une ablation :</p>
+    <ul>
+      <li><strong>uniforme</strong> : chaque résidu choisi avec probabilité \(r = 0{,}15\) ;</li>
+      <li><strong>préférentielle</strong> : un taux fixe plus élevé sur la CDR3, le reste ajusté pour garder la moyenne. Ng et Briney (2025) utilisent 25 % sur les CDR3 lourde et légère ; ils rapportent une convergence de la perte de validation avec environ 29 % de temps d'entraînement en moins et une meilleure prédiction des CDR3, sans perte significative sur les FR ;</li>
+      <li><strong>par segments</strong> : masquer des segments contigus force le modèle à reconstruire des motifs entiers, utile pour les bornes de régions.</li>
+    </ul>
+    <p>Pour la stratégie préférentielle, avec \(n_r\) résidus au taux fixé \(r_r\) et \(n_{\text{rest}}\) résidus restants :</p>
+    <div class="math-block">\[ r_{\text{rest}} = \frac{\bar r \, N - \sum_{r} n_r\, r_r}{n_{\text{rest}}} . \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>VH de 120 résidus, CDR3 de 13 résidus à 25 %, moyenne visée 15 % : \(r_{\text{rest}} = (0{,}15 \times 120 - 13 \times 0{,}25) / 107 = (18 - 3{,}25)/107 = 0{,}138\). Avec une CDR3 de 22 résidus, \(r_{\text{rest}} = (18 - 5{,}5)/98 = 0{,}128\) : le taux des FR dépend de la longueur de CDR3, effet à garder en tête dans l'analyse.</p>
+    </div>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>Votre tâche cible est la numérotation, portée surtout par les FR et les ancres. Pourquoi masquer davantage la CDR3 ? La réponse doit venir d'une ablation sur la tâche aval, pas de l'analogie avec la prédiction d'affinité. Il est possible que le masquage préférentiel des <i>bornes</i> FR/CDR soit plus utile ici.</p></div>
+
+    <h2 id="dapt"><span class="num">5</span>DAPT : adapter au domaine</h2>
+    <p>Gururangan et al. (2020) appellent DAPT (<i>domain-adaptive pretraining</i>) la poursuite du MLM sur un grand corpus du domaine cible. Ici, le domaine est celui des séquences IG, TR, MH et IgSF, toutes espèces.</p>
+    <h3>Construire le corpus</h3>
+    <ul>
+      <li><strong>Sources</strong> : références IMGT (germinales, réarrangées, structures), répertoires d'anticorps (OAS), répertoires de TR, séquences HLA et MH d'autres espèces, domaines IgSF de UniProt. Vérifier la licence de chaque source.</li>
+      <li><strong>Découpage en domaines</strong> : une entrée = un domaine, ou une chaîne complète si l'on veut aussi apprendre la délimitation. Les deux sont défendables ; le second correspond mieux à l'usage réel de DomainGapAlign.</li>
+      <li><strong>Déduplication</strong> à forte identité (par exemple <code>mmseqs easy-linclust --min-seq-id 0.95</code>) pour éviter que les clones dominent.</li>
+      <li><strong>Filtrage contre validation et test</strong> (module 3, couche 6).</li>
+    </ul>
+    <h3>Équilibrer les sources</h3>
+    <p>Les répertoires humains comptent des millions de séquences, certaines espèces quelques centaines. On échantillonne la source \(s\) avec une température \(\alpha\) :</p>
+    <div class="math-block">\[ p_s = \frac{n_s^{\alpha}}{\sum_{s'} n_{s'}^{\alpha}}, \qquad \alpha = 1 : \text{proportions naturelles}, \quad \alpha \to 0 : \text{uniforme}. \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Humain 900 000, souris 90 000, lama 1 000 séquences. Avec \(\alpha = 1\), le lama pèse 0,10 %. Avec \(\alpha = 0{,}5\) : \(\sqrt{900\,000} = 948{,}7\), \(\sqrt{90\,000} = 300\), \(\sqrt{1\,000} = 31{,}6\) ; le lama pèse \(31{,}6 / 1\,280{,}3 = 2{,}5\,\%\), soit 25 fois plus, au prix de répétitions plus fréquentes de ses séquences (risque de surapprentissage à surveiller).</p>
+    </div>
+    <h3>Hyperparamètres et garde-fous</h3>
+    <ul>
+      <li>taux d'apprentissage plus faible qu'au pré-entraînement initial, avec préchauffage et décroissance cosinus ; à fixer par un petit balayage sur la perte de validation ;</li>
+      <li><strong>oubli catastrophique</strong> : suivre la perplexité sur un échantillon UniRef tenu à l'écart. Mélanger quelques pourcents de protéines génériques (rejeu) si elle dérive ;</li>
+      <li>suivre la perte de validation <strong>par région, par locus, par espèce et par palier de nouveauté</strong>, pas seulement globalement ;</li>
+      <li>budget : \(5 \times 10^6\) domaines de 120 résidus font \(6 \times 10^8\) jetons. Avec 256 séquences par lot, une époque fait environ 19 500 pas.</li>
+    </ul>
+
+    <h2 id="tapt"><span class="num">6</span>TAPT : adapter à la tâche (optionnel)</h2>
+    <p>Le TAPT (<i>task-adaptive pretraining</i>) poursuit le MLM sur les seules séquences du jeu d'entraînement de la tâche, sans étiquettes, quelques époques. Il aide quand la distribution de la tâche diffère de celle du corpus DAPT, par exemple si le jeu annoté est dominé par des structures PDB alors que le DAPT est dominé par des répertoires.</p>
+    <p>Pour décider, un plan factoriel \(2 \times 2\) suffit : {sans DAPT, DAPT} × {sans TAPT, TAPT}, chaque cellule suivie du même fine-tuning, plusieurs graines. On rapporte l'effet principal et l'interaction. Si le TAPT n'apporte rien après DAPT, on le retire : moins d'étapes, moins de risques de fuite.</p>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>TAPT sur « les données de la tâche » : lesquelles ? Uniquement le train. Inclure les séquences de validation ou de test, même sans étiquettes, est une fuite (module 3).</p></div>
+
+    <h2 id="evaluer"><span class="num">7</span>Évaluer le pré-entraînement avant le fine-tuning</h2>
+    <p>Trois diagnostics rapides indiquent si le DAPT a appris quelque chose d'utile à l'annotation.</p>
+    <h3>Perplexité stratifiée</h3>
+    <p>Calculée sur la validation, par région (FR1 … FR4), par locus, par espèce et par palier d'identité au train. Elle doit baisser partout, et surtout sur les espèces rares.</p>
+    <h3>Sondage linéaire</h3>
+    <p>On gèle l'encodeur et on entraîne une simple couche linéaire \(W\) pour prédire la région ou la position IMGT de chaque résidu à partir de \(h_i\) :</p>
+    <div class="math-block">\[ \hat y_i = \operatorname{softmax}(W h_i + b), \qquad \min_{W, b} \; -\sum_i \log \hat y_{i, y_i} + \lambda \lVert W \rVert_2^2 . \]</div>
+    <p>Si la sonde linéaire atteint déjà une haute exactitude, l'information est présente dans les représentations. Comparer la sonde sur le modèle de base et sur le modèle après DAPT donne une mesure directe de l'apport du DAPT, indépendante du fine-tuning.</p>
+    <h3>Pseudo-log-vraisemblance</h3>
+    <p>Pour noter une séquence entière, on masque chaque position tour à tour : \(\mathrm{PLL}(x) = \sum_{i=1}^{L} \log p_\theta(x_i \mid x_{\setminus i})\). Coûteux (\(L\) passes), mais utile pour repérer les séquences atypiques ou mal annotées.</p>
+
+    <h2 id="code"><span class="num">8</span>Le code</h2>
+    <pre data-lang="python" data-file="src/protannotml/data/masking.py (extrait, testé)"><code>def region_fixed_rate_probs(regions, fixed_rates, overall_rate):
+    """Per-token selection probabilities; the remaining rate keeps the overall mean."""
+    regions = list(regions)
+    n = len(regions)
+    probs = np.empty(n)
+    fixed_mass, rest_idx = 0.0, []
+    for i, r in enumerate(regions):
+        if r in fixed_rates:
+            probs[i] = fixed_rates[r]
+            fixed_mass += fixed_rates[r]
+        else:
+            rest_idx.append(i)
+    if rest_idx:
+        r_rest = (overall_rate * n - fixed_mass) / len(rest_idx)
+        if not 0.0 <= r_rest <= 1.0:
+            raise ValueError(f"infeasible rates: remaining rate would be {r_rest:.3f}")
+        probs[rest_idx] = r_rest
+    return probs</code></pre>
+    <pre data-lang="python" data-file="src/protannotml/training/dapt.py (esquisse, PyTorch + transformers)"><code>import numpy as np
+import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+
+from protannotml.data.masking import MaskingConfig, mask_sequence, region_fixed_rate_probs
+
+
+class RegionAwareCollator:
+    """Batch collator: tokenize, mask with region-aware rates, pad."""
+
+    def __init__(self, tokenizer, fixed_rates=None, overall_rate=0.15, seed=0):
+        self.tok = tokenizer
+        self.fixed_rates = fixed_rates or {}
+        self.overall_rate = overall_rate
+        self.rng = np.random.default_rng(seed)
+        self.aa_ids = [tokenizer.convert_tokens_to_ids(a) for a in "ACDEFGHIKLMNPQRSTVWY"]
+
+    def __call__(self, batch):  # batch: list of {"sequence": str, "regions": list[str]}
+        enc = [self.tok(b["sequence"], return_special_tokens_mask=True) for b in batch]
+        inputs, labels = [], []
+        for b, e in zip(batch, enc):
+            ids = np.array(e["input_ids"])
+            special = np.array(e["special_tokens_mask"], dtype=bool)
+            probs = region_fixed_rate_probs(b["regions"], self.fixed_rates, self.overall_rate)
+            x, y = mask_sequence(ids, special, probs, self.tok.mask_token_id, self.aa_ids,
+                                 MaskingConfig(rate=self.overall_rate), self.rng)
+            inputs.append(torch.tensor(x))
+            labels.append(torch.tensor(y))
+        pad = self.tok.pad_token_id
+        x = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=pad)
+        y = torch.nn.utils.rnn.pad_sequence(labels, batch_first=True, padding_value=-100)
+        return {"input_ids": x, "attention_mask": (x != pad).long(), "labels": y}
+
+
+model_id = "facebook/esm2_t33_650M_UR50D"   # record the exact revision in the run metadata
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForMaskedLM.from_pretrained(model_id)
+collator = RegionAwareCollator(tokenizer, fixed_rates={"CDR3": 0.25})</code></pre>
+    <p class="kbd-hint">L'esquisse PyTorch n'a pas pu être exécutée dans l'environnement de rédaction (pas d'accès à PyPI) ; la logique de masquage qu'elle appelle est testée.</p>
+
+    <h2 id="quiz"><span class="num">9</span>Auto-évaluation</h2>
+    <details class="check"><summary>Pourquoi 10 % des positions choisies restent-elles inchangées ?</summary><p>Pour que le modèle produise de bonnes représentations aussi pour des jetons non masqués, ce qui est la situation en aval.</p></details>
+    <details class="check"><summary>Quelle perplexité pour un modèle qui ne sait rien sur 20 acides aminés ?</summary><p>20, car \(\mathcal{L} = \ln 20\).</p></details>
+    <details class="check"><summary>Comment savoir si le DAPT a appris la numérotation sans fine-tuning ?</summary><p>Par un sondage linéaire sur l'encodeur gelé, comparé avant et après DAPT.</p></details>
+    <details class="check"><summary>Le TAPT peut-il utiliser les séquences de test sans leurs étiquettes ?</summary><p>Non : c'est une fuite par pré-entraînement.</p></details>
+
+    <h2 id="sources"><span class="num">10</span>Sources</h2>
+    <ol class="sources">
+      <li>Devlin J, et al. (2019) BERT: pre-training of deep bidirectional transformers for language understanding. <i>NAACL</i>.</li>
+      <li>Gururangan S, et al. (2020) Don't stop pretraining: adapt language models to domains and tasks. <i>ACL</i>.</li>
+      <li>Salazar J, et al. (2020) Masked language model scoring. <i>ACL</i>.</li>
+      <li>Lin Z, et al. (2023) Evolutionary-scale prediction of atomic-level protein structure with a language model. <i>Science</i> 379:1123–1130 (ESM-2).</li>
+      <li>ESMC model cards, Biohub, Hugging Face : <a href="https://huggingface.co/biohub/ESMC-600M">ESMC-600M</a>, <a href="https://huggingface.co/biohub/ESMC-6B-hf">ESMC-6B</a>.</li>
+      <li>Elnaggar A, et al. (2022) ProtTrans. <i>IEEE TPAMI</i> 44:7112–7127.</li>
+      <li>Su J, et al. (2024) SaProt: protein language modeling with structure-aware vocabulary. <i>ICLR</i>.</li>
+      <li>Olsen TH, Moal IH, Deane CM (2024) Addressing the antibody germline bias and its effect on language models for improved antibody design. <i>Bioinformatics</i> (AbLang-2).</li>
+      <li>Ruffolo JA, Gray JJ, Sulam J (2021) Deciphering antibody affinity maturation with language models and weakly supervised learning. <i>arXiv</i> (AntiBERTy).</li>
+      <li>Shuai RW, Ruffolo JA, Gray JJ (2023) IgLM: infilling language modeling for antibody sequence design. <i>Cell Systems</i>.</li>
+      <li>Kenlay H, et al. (2024) Large scale paired antibody language models. <i>PLoS Comput Biol</i> (IgBert, IgT5).</li>
+      <li>Ng K, Briney B (2025) Focused learning by antibody language models using preferential masking of non-templated regions. <i>Patterns</i> 6:101239. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12191730">PMC</a></li>
+    </ol>
+
+    <nav class="pager" aria-label="Navigation entre modules">
+      <a class="prev" href="m3.html"><small>Module précédent</small>Partitionnement anti-fuite</a>
+      <a class="next" href="m5.html"><small>Module suivant</small>Multi-task learning</a>
+    </nav>
+  </main>
+</div>
+
+<script>
+(() => {
+  const SEQ = "EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS";
+  const LENS = [["FR1", 25], ["CDR1", 8], ["FR2", 17], ["CDR2", 8], ["FR3", 38], ["CDR3", 13], ["FR4", 11]];
+  const REG = [];
+  LENS.forEach(([r, n]) => { for (let i = 0; i < n; i++) REG.push(r); });
+  const AA = "ACDEFGHIKLMNPQRSTVWY";
+  const box = document.getElementById("tokens"), strat = document.getElementById("strategy");
+  const rates = document.getElementById("rates"), bars = document.getElementById("bars"), head = document.getElementById("predHead");
+  let rnd = Math.random;
+  let state = [];
+
+  function probsFor(s) {
+    if (s === "uniform") return REG.map(() => 0.15);
+    if (s === "pref") {
+      const nC = REG.filter((r) => r === "CDR3").length;
+      const rest = (0.15 * REG.length - nC * 0.25) / (REG.length - nC);
+      return REG.map((r) => (r === "CDR3" ? 0.25 : rest));
+    }
+    return null;
+  }
+  function select(s) {
+    const n = REG.length;
+    if (s !== "span") { const p = probsFor(s); return p.map((pi) => rnd() < pi); }
+    const target = Math.round(0.15 * n), sel = new Array(n).fill(false);
+    let guard = 0;
+    while (sel.filter(Boolean).length < target && guard++ < 500) {
+      let len = 1; while (rnd() > 1 / 3) len++;
+      const st = Math.floor(rnd() * n);
+      for (let i = st; i < Math.min(n, st + len); i++) sel[i] = true;
+    }
+    let idx = sel.map((v, i) => (v ? i : -1)).filter((i) => i >= 0);
+    while (idx.length > target) { const k = Math.floor(rnd() * idx.length); sel[idx[k]] = false; idx.splice(k, 1); }
+    return sel;
+  }
+  function simulate(i) {
+    // Simulated predictive distribution: confident in FR, uncertain in CDR3.
+    const r = REG[i], truth = SEQ[i];
+    const conf = r === "CDR3" ? 0.22 : r.startsWith("CDR") ? 0.45 : 0.82;
+    const others = AA.split("").filter((a) => a !== truth);
+    const p = { [truth]: conf };
+    let mass = 1 - conf;
+    const picks = others.sort(() => rnd() - 0.5).slice(0, 4);
+    picks.forEach((a, k) => { const v = mass * (k === 3 ? 1 : 0.35 + rnd() * 0.25); p[a] = v; mass -= v; });
+    return Object.entries(p).sort((a, b) => b[1] - a[1]);
+  }
+  function showPred(i) {
+    document.querySelectorAll(".tok.sel").forEach((t) => t.classList.remove("sel"));
+    box.children[i].classList.add("sel");
+    const dist = simulate(i), truth = SEQ[i];
+    const pTrue = dist.find(([a]) => a === truth)[1];
+    head.innerHTML = `Position ${i + 1} (${REG[i]}) · résidu vrai <b>${truth}</b> · contribution à la perte \\(-\\ln p = ${(-Math.log(pTrue)).toFixed(3)}\\)`;
+    bars.innerHTML = "";
+    dist.forEach(([a, v]) => {
+      const row = PA.html("div", { class: "bar" + (a === truth ? " true" : "") }, bars);
+      PA.html("span", { text: a }, row);
+      const tr = PA.html("div", { class: "track" }, row);
+      PA.html("div", { class: "fill", style: `width:${(v * 100).toFixed(1)}%` }, tr);
+      PA.html("span", { text: v.toFixed(3) }, row);
+    });
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([head]).catch(() => {});
+  }
+  function render() {
+    const s = strat.value, sel = select(s);
+    state = sel.map((v) => {
+      if (!v) return "";
+      const u = rnd();
+      return u < 0.8 ? "m" : u < 0.9 ? "r" : "k";
+    });
+    box.innerHTML = "";
+    SEQ.split("").forEach((a, i) => {
+      const cls = ["tok", REG[i].startsWith("CDR") ? REG[i].toLowerCase() : "", state[i]].filter(Boolean).join(" ");
+      let shown = a;
+      if (state[i] === "m") shown = "·";
+      if (state[i] === "r") { const o = AA.replace(a, ""); shown = o[Math.floor(rnd() * o.length)]; }
+      const t = PA.html("div", { class: cls, text: shown, title: `${i + 1} · ${REG[i]}` }, box);
+      if (state[i]) { t.tabIndex = 0; t.setAttribute("role", "button"); t.addEventListener("click", () => showPred(i)); t.addEventListener("keydown", (e) => { if (e.key === "Enter") showPred(i); }); }
+    });
+    // realized vs expected rates
+    const groups = { "CDR3": [], "autres": [] };
+    REG.forEach((r, i) => (r === "CDR3" ? groups.CDR3 : groups.autres).push(i));
+    const p = probsFor(s);
+    const exp = (g) => s === "span" ? 0.15 : g.reduce((acc, i) => acc + p[i], 0) / g.length;
+    const real = (g) => g.filter((i) => state[i]).length / g.length;
+    rates.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Région</th><th class="num">attendu</th><th class="num">réalisé</th></tr></thead><tbody>
+      ${["CDR3", "autres"].map((k) => `<tr><td>${k}</td><td class="num">${(exp(groups[k]) * 100).toFixed(1)} %</td><td class="num">${(real(groups[k]) * 100).toFixed(1)} %</td></tr>`).join("")}
+      <tr><td>total</td><td class="num">15,0 %</td><td class="num">${(state.filter(Boolean).length / REG.length * 100).toFixed(1)} %</td></tr></tbody></table></div>`;
+    const first = state.findIndex((v) => v);
+    if (first >= 0) showPred(state.findIndex((v, i) => v && REG[i] === "CDR3") >= 0 ? state.findIndex((v, i) => v && REG[i] === "CDR3") : first);
+  }
+  document.getElementById("remask").addEventListener("click", render);
+  strat.addEventListener("change", render);
+  // Seeded first draw so the page looks the same at rest.
+  let s0 = 42; rnd = () => { s0 = (s0 * 1664525 + 1013904223) % 4294967296; return s0 / 4294967296; };
+  render();
+  rnd = Math.random;
+})();
+</script>
+</body>
+</html>

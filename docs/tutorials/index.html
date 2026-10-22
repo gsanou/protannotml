@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parcours ProtAnnotML</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<style>
+  .hero { max-width: 1200px; margin: 0 auto; padding-block: 48px 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+  .hero h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); margin: .15em 0 .3em; }
+  .hero .lede { max-width: 56ch; }
+  .necklace { border: 1px solid var(--rule); background: var(--panel); border-radius: var(--radius); padding: 16px; }
+  .necklace .nk-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: var(--s-0); color: var(--muted); margin-bottom: 8px; }
+  .necklace .nk-head b { color: var(--ink); font-family: var(--f-mono); font-weight: 600; }
+  .readout { font-family: var(--f-mono); font-size: var(--s-0); color: var(--ink-2); min-height: 1.6em; margin-top: 8px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding-block: 8px 80px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap h2 { border-top: 1px solid var(--rule); }
+  .pipeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
+  .pipeline > div { padding: 16px; border-right: 1px solid var(--rule); position: relative; min-width: 0; }
+  .pipeline > div:last-child { border-right: 0; }
+  .pipeline .stage { font-size: var(--s-0); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .pipeline h3 { margin: 4px 0 6px; font-size: 1.2rem; }
+  .pipeline p { margin: 0; font-size: var(--s-0); color: var(--ink-2); line-height: 1.5; }
+  .pipeline .opt { border-style: dashed; }
+  .pipeline .heads { background: var(--accent-soft); }
+  @media (max-width: 900px) { .pipeline { grid-template-columns: minmax(0, 1fr); } .pipeline > div { border-right: 0; border-bottom: 1px solid var(--rule); } .pipeline > div:last-child { border-bottom: 0; } }
+  .modules { list-style: none; padding: 0; margin: 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+  .modules li { margin: 0; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 20px; padding: 22px 0; border-bottom: 1px solid var(--rule); align-items: start; max-width: none; }
+  .modules .n { font-family: var(--f-display); font-size: 2.4rem; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .modules h3 { margin: 0 0 4px; font-size: 1.35rem; }
+  .modules h3 a { color: var(--ink); text-decoration: none; }
+  .modules h3 a:hover { color: var(--accent); text-decoration: underline; }
+  .modules p { margin: 0; color: var(--ink-2); max-width: 75ch; }
+  .modules .keys { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .status { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 3px; white-space: nowrap; }
+  .status.done { background: var(--ok-bg); color: var(--ok); }
+  .status.todo { background: var(--paper-2); color: var(--muted); }
+  @media (max-width: 600px) { .modules li { grid-template-columns: 44px minmax(0, 1fr); } .modules .status { grid-column: 2; justify-self: start; } .modules .n { font-size: 1.8rem; } }
+  .conventions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .conventions .callout { margin: 0; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Parcours de formation</span>
+    <nav aria-label="Modules">
+      <a href="index.html" aria-current="page">Accueil</a>
+      <a href="m1.html">1</a><a href="m2.html">2</a><a href="m3.html">3</a><a href="m4.html">4</a><a href="m5.html">5</a><a href="m6.html">6</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-grid">
+    <div>
+      <p class="eyebrow">Successeur ML de IMGT/DomainGapAlign</p>
+      <h1>Parcours ProtAnnotML</h1>
+      <p class="lede">Six modules pour passer de l'immunogénétique IMGT à un modèle de langage protéique qui délimite les domaines, numérote selon IMGT, identifie gène, allèle et espèce, et annote FR et CDR. Chaque module mêle biologie, mathématiques avec exemples chiffrés, animations et code de référence.</p>
+      <p class="meta-row"><span><b>Public</b> doctorat / post-doc, bio-informatique et ML</span><span><b>Langue du code</b> anglais</span><span><b>Mis à jour</b> 20 octobre 2026</span></p>
+    </div>
+    <figure class="necklace" style="margin:0">
+      <div class="nk-head"><span>Domaine VH de trastuzumab, <b>[8.8.13]</b></span><span>120 résidus sur 128 positions IMGT</span></div>
+      <div class="scroll-x"><svg id="necklace" viewBox="0 0 620 250" role="img" aria-label="Domaine VH du trastuzumab représenté en perles colorées par région IMGT"></svg></div>
+      <div class="readout" id="readout" aria-live="polite">Survolez ou touchez une perle.</div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--fr)"></i>FR-IMGT</span><span><i style="background:var(--cdr1)"></i>CDR1</span><span><i style="background:var(--cdr2)"></i>CDR2</span><span><i style="background:var(--cdr3)"></i>CDR3</span><span><i style="border:1.5px dashed var(--muted)"></i>gap IMGT</span></div>
+    </figure>
+  </div>
+</section>
+
+<main class="wrap">
+  <h2 style="margin-top:1.2em">La chaîne d'entraînement visée</h2>
+  <div class="pipeline">
+    <div><span class="stage">Point de départ</span><h3>PLM de base</h3><p>ESM-2, ESM C, ProtT5 ou un modèle anticorps (AbLang-2, AntiBERTy…). Choix à justifier par ablation.</p></div>
+    <div><span class="stage">Étape 1</span><h3>DAPT</h3><p>MLM sur un large corpus IG, TR, MH et IgSF, partitionné sans fuite.</p></div>
+    <div class="opt"><span class="stage">Étape 2, optionnelle</span><h3>TAPT</h3><p>MLM sur les seules séquences des tâches cibles (train uniquement).</p></div>
+    <div><span class="stage">Étape 3</span><h3>Fine-tuning MTL</h3><p>Encodeur partagé, perte pondérée ou incertitude homoscédastique.</p></div>
+    <div class="heads"><span class="stage">Sorties</span><h3>Têtes</h3><p>Région FR/CDR, position IMGT, type de domaine, segments V/D/J, gène, allèle, espèce.</p></div>
+  </div>
+
+  <h2>Modules</h2>
+  <ol class="modules">
+    <li><span class="n">1</span><div><h3><a href="m1.html">Fondations d'immunogénétique</a></h3><p>Superfamille IgSF, domaines V, C et G, récepteurs IG, TR et MH, recombinaison V(D)J animée, nomenclature IMGT des gènes et allèles, et ce que tout cela impose aux étiquettes du modèle.</p><div class="keys"><span class="tag">IgSF</span><span class="tag">V(D)J</span><span class="tag">IGHV3-23*01</span><span class="tag">jonction</span></div></div><span class="status done" data-module="1">Disponible</span></li>
+    <li><span class="n">2</span><div><h3><a href="m2.html">Numérotation IMGT et exceptions</a></h3><p>Positions 1 à 128 du domaine V, règles des gaps et des insertions 111.x/112.x, domaines C et G, cas difficiles. Atelier interactif de numérotation.</p><div class="keys"><span class="tag">FR/CDR-IMGT</span><span class="tag">gaps</span><span class="tag">112.1</span><span class="tag">C-DOMAIN</span></div></div><span class="status done" data-module="2">Disponible</span></li>
+    <li><span class="n">3</span><div><h3><a href="m3.html">Partitionnement anti-fuite avec MMseqs2</a></h3><p>Pourquoi le clustering par représentant ne suffit pas, composantes connexes, partitions par espèce, locus et gène, fuite via le pré-entraînement, audit.</p><div class="keys"><span class="tag">MMseqs2</span><span class="tag">GraphPart</span><span class="tag">hold-out gène</span></div></div><span class="status done" data-module="3">Disponible</span></li>
+    <li><span class="n">4</span><div><h3><a href="m4.html">Modèles de langage et MLM : DAPT puis TAPT</a></h3><p>Transformers protéiques en bref, perte MLM dérivée pas à pas, stratégies de masquage ciblées CDR, protocole DAPT et TAPT, contrôles.</p><div class="keys"><span class="tag">MLM</span><span class="tag">perplexité</span><span class="tag">masquage préférentiel</span></div></div><span class="status done" data-module="4">Disponible</span></li>
+    <li><span class="n">5</span><div><h3><a href="m5.html">Multi-task learning pour l'annotation</a></h3><p>Architecture à têtes multiples, perte pondérée, incertitude homoscédastique (Kendall et al., 2018) dérivée et illustrée, décodage monotone de la numérotation.</p><div class="keys"><span class="tag">MTL</span><span class="tag">σ homoscédastique</span><span class="tag">Viterbi</span></div></div><span class="status done" data-module="5">Disponible</span></li>
+    <li><span class="n">6</span><div><h3><a href="m6.html">Évaluation, métriques et statistiques</a></h3><p>Métriques par tâche, intervalles de confiance par bootstrap groupé, tests appariés, comparaison à DomainGapAlign, IMGT/V-QUEST, IgBLAST, ANARCI et AbNumber.</p><div class="keys"><span class="tag">bootstrap</span><span class="tag">McNemar</span><span class="tag">F1 de bornes</span></div></div><span class="status done" data-module="6">Disponible</span></li>
+  </ol>
+
+  <h2>Conventions de lecture</h2>
+  <div class="conventions">
+    <div class="callout note"><span class="label">À retenir</span><p>L'idée clé d'une section, à garder en tête pour la suite.</p></div>
+    <div class="callout example"><span class="label">Exemple chiffré</span><p>Les maths appliquées à un cas concret, calculs détaillés.</p></div>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>La critique qu'un relecteur de NAR ou de Genome Biology ferait.</p></div>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>Hypothèse non vérifiée ou source en conflit. Ne pas citer tel quel.</p></div>
+  </div>
+  <p class="kbd-hint" style="margin-top:1.4em">Les couleurs des CDR (CDR1 rouge, CDR2 orange, CDR3 violet) s'inspirent des Colliers de Perles IMGT.</p>
+
+  <h2>Code de référence <code>protannotml</code></h2>
+  <p style="max-width:75ch">Livré à part sous forme d'archive. Identifiants, variables et commentaires en anglais. La logique est en Python et NumPy et passe 43 tests ; les modules PyTorch ont seulement été vérifiés syntaxiquement, faute d'accès à PyPI pendant la rédaction.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Module Python</th><th>Contenu</th><th>Tutoriel</th><th>État</th></tr></thead>
+      <tbody>
+        <tr><td><code>imgt.numbering</code>, <code>imgt.vocab</code>, <code>imgt.nomenclature</code></td><td>positions et ordre de séquence, règle des gaps et insertions, gabarits de FR, vocabulaire, noms de gènes</td><td><a href="m2.html">2</a>, <a href="m1.html">1</a></td><td>testé</td></tr>
+        <tr><td><code>data.partition</code></td><td>MMseqs2, composantes, retrait de ponts, hold-outs, audit, paliers</td><td><a href="m3.html">3</a></td><td>testé (sans binaire MMseqs2)</td></tr>
+        <tr><td><code>data.masking</code></td><td>masquage uniforme, préférentiel, par segments ; échantillonnage par température</td><td><a href="m4.html">4</a></td><td>testé</td></tr>
+        <tr><td><code>training.weighting_ref</code>, <code>decoding.monotonic</code></td><td>formules de pondération, décodage monotone O(LK)</td><td><a href="m5.html">5</a></td><td>testé</td></tr>
+        <tr><td><code>models.mtl</code>, <code>training.dapt</code></td><td>modèle multi-tâche, pondération par incertitude, DAPT/TAPT</td><td><a href="m4.html">4</a>, <a href="m5.html">5</a></td><td>non exécuté</td></tr>
+        <tr><td><code>eval.metrics</code>, <code>eval.stats</code></td><td>exactitudes, F1 de bornes, calibration, bootstrap par groupe, McNemar, Holm</td><td><a href="m6.html">6</a></td><td>testé</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Points ouverts relevés pendant la rédaction</h2>
+  <ul style="max-width:80ch">
+    <li><strong>Licence IMGT</strong> : la page des conditions d'utilisation indique CC BY-NC-ND 4.0, alors qu'un billet de l'OPIG (29 juillet 2026) annonce CC BY 4.0 depuis le 1er juillet 2026. À confirmer par écrit auprès d'IMGT avant toute redistribution de données dérivées ou de poids.</li>
+    <li><strong>Règle des gaps de CDR1 et CDR2</strong> : deux pages IMGT se contredisent ; la règle « sommet de boucle » est codée, à valider sur des sorties de DomainGapAlign (module 2).</li>
+    <li><strong>Vérité terrain</strong> : des étiquettes issues de DomainGapAlign ne permettent pas de montrer qu'on fait mieux que lui ; prévoir un jeu de désaccords annoté indépendamment (module 6).</li>
+    <li><strong>Concurrent direct</strong> : ANARCII (OPIG, 2025), numérotation par modèle seq2seq sans alignement, à inclure dans toutes les comparaisons.</li>
+  </ul>
+</main>
+
+<script>
+(() => {
+  // Trastuzumab VH with IMGT positions (gaps at 10, 31-34, 60-61, 73).
+  const seq = "EVQLVESGGGLVQPGGSLRLSCAASGFNIKDTYIHWVRQAPGKGLEWVARIYPTNGYTRYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYCSRWGGDGFYAMDYWGQGTLVTVSS";
+  const gaps = new Set([10, 31, 32, 33, 34, 60, 61, 73]);
+  const anchors = { 23: "1st-CYS", 41: "CONSERVED-TRP", 89: "hydrophobe conservé", 104: "2nd-CYS", 118: "J-TRP" };
+  const region = (p) => p <= 26 ? "FR1" : p <= 38 ? "CDR1" : p <= 55 ? "FR2" : p <= 65 ? "CDR2" : p <= 104 ? "FR3" : p <= 117 ? "CDR3" : "FR4";
+  const colorOf = { FR1: "--fr", FR2: "--fr", FR3: "--fr", FR4: "--fr", CDR1: "--cdr1", CDR2: "--cdr2", CDR3: "--cdr3" };
+  const cells = [];
+  let k = 0;
+  for (let p = 1; p <= 128; p++) {
+    if (gaps.has(p)) cells.push({ pos: p, aa: null });
+    else cells.push({ pos: p, aa: seq[k++] });
+  }
+  const root = document.getElementById("necklace");
+  const readout = document.getElementById("readout");
+  const perRow = 32, dx = 18.6, dy = 58, r = 7.2, x0 = 22, y0 = 34;
+
+  function draw() {
+    root.innerHTML = "";
+    const ink = "var(--ink)";
+    cells.forEach((c, i) => {
+      const row = Math.floor(i / perRow), col = i % perRow;
+      const xx = row % 2 === 0 ? x0 + col * dx : x0 + (perRow - 1 - col) * dx;
+      const yy = y0 + row * dy;
+      const g = PA.svg("g", { tabindex: "0", "data-i": i }, root);
+      if (c.aa === null) {
+        PA.svg("circle", { cx: xx, cy: yy, r: r - 1, fill: "none", stroke: "var(--muted)", "stroke-dasharray": "2 2", "stroke-width": 1.2 }, g);
+      } else {
+        const reg = region(c.pos);
+        const isAnchor = anchors[c.pos];
+        const circ = PA.svg("circle", { cx: xx, cy: yy, r, fill: `var(${colorOf[reg]})`, stroke: isAnchor ? ink : "none", "stroke-width": isAnchor ? 2 : 0, class: "pearl", style: "transition: opacity .3s, transform .3s; transform-origin:" + xx + "px " + yy + "px" }, g);
+        PA.svg("text", { x: xx, y: yy + 3.3, "text-anchor": "middle", "font-size": 8.6, "font-family": "var(--f-mono)", fill: reg.startsWith("CDR") ? "#fff" : "var(--ink)", text: c.aa, "pointer-events": "none" }, g);
+      }
+      if ([1, 27, 39, 56, 66, 105, 118, 128].includes(c.pos)) {
+        PA.svg("text", { x: xx, y: yy - 12, "text-anchor": "middle", "font-size": 8.5, class: "svg-muted", text: c.pos }, g);
+      }
+      const show = () => {
+        const reg = region(c.pos);
+        readout.textContent = c.aa === null
+          ? `Position ${c.pos} (${reg}) : gap, aucune lettre`
+          : `Position ${c.pos} · ${c.aa} · ${reg}${anchors[c.pos] ? " · " + anchors[c.pos] : ""}`;
+      };
+      g.addEventListener("mouseenter", show);
+      g.addEventListener("focus", show);
+      g.addEventListener("click", show);
+    });
+    // serpentine connectors between rows
+    for (let row = 0; row < 3; row++) {
+      const yy = y0 + row * dy;
+      const xx = row % 2 === 0 ? x0 + (perRow - 1) * dx : x0;
+      const dir = row % 2 === 0 ? 1 : -1;
+      PA.svg("path", { d: `M ${xx + dir * (r + 1)} ${yy} q ${dir * 14} 0 ${dir * 14} ${dy / 2} q 0 ${dy / 2} ${-dir * 14} ${dy / 2}`, fill: "none", stroke: "var(--rule)", "stroke-width": 1.5 }, root);
+    }
+  }
+  draw();
+  if (!PA.reducedMotion()) {
+    const pearls = [...root.querySelectorAll(".pearl")];
+    pearls.forEach((p) => { p.style.opacity = "0.25"; });
+    pearls.forEach((p, i) => setTimeout(() => { p.style.opacity = "1"; }, 200 + i * 14));
+  }
+})();
+</script>
+</body>
+</html>

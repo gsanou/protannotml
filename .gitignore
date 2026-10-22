@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Data: never commit raw or derived datasets (licensing + size).
+# Only data/README.md and small fixtures under tests/ are tracked.
+data/*
+!data/README.md
+*.fasta
+*.fa
+*.faa
+!tests/fixtures/*.fasta
+
+# MMseqs2 working files
+tmp/
+mmseqs_*/
+*.dbtype
+*.index
+
+# Training outputs
+runs/
+checkpoints/
+wandb/
+lightning_logs/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin

@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Multi-task learning pour l'annotation</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.js"></script>
+<style>
+  .weights-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  @media (max-width: 720px) { .weights-grid { grid-template-columns: minmax(0, 1fr); } }
+  .sliders { display: grid; gap: 8px; }
+  .sliders label { display: grid; grid-template-columns: 8.5em minmax(0, 1fr) 4.2em; gap: 8px; align-items: center; font-size: var(--s-0); color: var(--ink-2); }
+  .sliders input { width: 100%; accent-color: var(--accent); }
+  .sliders output { font-family: var(--f-mono); text-align: right; }
+  .wtable td, .wtable th { padding: 6px 10px; }
+  .dp { border-collapse: separate; border-spacing: 3px; font-family: var(--f-mono); font-size: .78rem; }
+  .dp th, .dp td { border: 0; padding: 6px 8px; text-align: center; border-radius: 3px; }
+  .dp td { background: var(--paper-2); color: var(--ink-2); transition: background .3s, color .3s; }
+  .dp td.argmax { box-shadow: inset 0 0 0 2px var(--crit); }
+  .dp td.path { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .dp th { background: transparent; color: var(--muted); font-weight: 600; }
+  .seg-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg-btns button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Module 5 sur 6</span>
+    <nav aria-label="Modules">
+      <a href="index.html">Accueil</a>
+      <a href="m1.html">1</a><a href="m2.html">2</a><a href="m3.html">3</a><a href="m4.html">4</a><a href="m5.html" aria-current="page">5</a><a href="m6.html">6</a>
+    </nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="toc" aria-label="Sommaire"><h2>Sommaire</h2><ol></ol></aside>
+  <main class="article">
+    <p class="eyebrow">Module 5 · Fine-tuning</p>
+    <h1>Multi-task learning pour l'annotation</h1>
+    <p class="lede">Un seul encodeur, plusieurs têtes : régions FR et CDR, position IMGT, type de domaine, segments V, D et J, gène, allèle, espèce. Ce module construit l'architecture, dérive la pondération par incertitude homoscédastique et garantit des sorties valides par décodage contraint.</p>
+    <p class="meta-row"><span><b>Durée</b> 2 h</span><span><b>Prérequis</b> modules 2 et 4</span><span><b>Code</b> <code>protannotml.models.mtl</code>, <code>protannotml.decoding.monotonic</code></span></p>
+
+    <h2 id="pourquoi"><span class="num">1</span>Pourquoi plusieurs tâches à la fois</h2>
+    <p>Les annotations de DomainGapAlign sont liées entre elles : la position IMGT détermine la région, le type de domaine restreint les positions possibles, le gène V implique le locus et l'espèce. Entraîner un encodeur partagé sur toutes ces cibles (Caruana, 1997) apporte trois bénéfices attendus :</p>
+    <ul>
+      <li><strong>régularisation</strong> : des tâches faciles (régions) guident l'apprentissage des tâches dures (positions dans une CDR3 longue) ;</li>
+      <li><strong>efficacité</strong> : un seul passage d'encodeur pour toutes les sorties, comme l'outil actuel ;</li>
+      <li><strong>cohérence</strong> : les sorties partagent une représentation, ce qui facilite les contraintes croisées.</li>
+    </ul>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>Pour un domaine V, la région est une fonction déterministe de la position IMGT. Une tête « région » est donc redondante : son exactitude ne doit pas être présentée comme un résultat indépendant. Elle reste utile comme tâche auxiliaire et comme contrôle de cohérence, à condition de le dire. Les bénéfices du MTL doivent être démontrés par ablation contre des modèles mono-tâche, pas supposés.</p></div>
+
+    <h2 id="architecture"><span class="num">2</span>Architecture</h2>
+    <figure class="panel">
+      <div class="scroll-x"><svg id="arch" viewBox="0 0 760 330" role="img" aria-label="Architecture multi-tâche avec têtes par résidu et têtes par domaine"></svg></div>
+      <figcaption><b>Encodeur partagé et deux familles de têtes.</b> Les têtes par résidu lisent \(h_i\) directement. Les têtes par domaine lisent la moyenne de \(h_i\) sur l'étendue du domaine : étendue vraie à l'entraînement, étendue prédite par la tête « type de domaine » à l'inférence.</figcaption>
+    </figure>
+    <p>Pour une chaîne qui contient plusieurs domaines (VH-CH1-…, scFv), la tête « type de domaine » joue le rôle d'un segmenteur : chaque résidu reçoit une étiquette (hors domaine, VH, V-KAPPA, V-LAMBDA, V-ALPHA, V-BETA, CH1, CL, G-ALPHA1…), et les domaines sont les plages contiguës de même étiquette. La tête « segment » étiquette chaque résidu V-REGION, N/D-REGION, J-REGION ou C-REGION.</p>
+
+    <h2 id="tetes"><span class="num">3</span>Têtes et pertes</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tête</th><th>Niveau</th><th>Classes</th><th>Perte</th></tr></thead>
+        <tbody>
+          <tr><td>Région</td><td>résidu</td><td>OUT, FR1, CDR1, …, FR4</td><td>entropie croisée</td></tr>
+          <tr><td>Position IMGT</td><td>résidu</td><td>UNNUMBERED, 1 … 128, 111.k, 112.k…</td><td>entropie croisée + décodage monotone</td></tr>
+          <tr><td>Type de domaine</td><td>résidu</td><td>OUT, VH, V-KAPPA, …, CH1, G-ALPHA1…</td><td>entropie croisée</td></tr>
+          <tr><td>Segment</td><td>résidu</td><td>V, N/D, J, C, OUT</td><td>entropie croisée</td></tr>
+          <tr><td>Locus</td><td>domaine</td><td>IGH, IGK, IGL, TRA, …</td><td>marginalisation du gène</td></tr>
+          <tr><td>Gène V, gène J</td><td>domaine</td><td>IGHV3-23, …</td><td>entropie croisée (ou ensemble)</td></tr>
+          <tr><td>Allèle</td><td>domaine</td><td>allèles traduits</td><td>vraisemblance marginale sur l'ensemble</td></tr>
+          <tr><td>Espèce</td><td>domaine</td><td>Homo sapiens, …</td><td>entropie croisée</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Pour une tête par résidu \(t\), avec \(\mathcal{I}_t\) l'ensemble des résidus étiquetés pour cette tâche dans le lot :</p>
+    <div class="math-block">\[ \mathcal{L}_t = -\frac{1}{|\mathcal{I}_t|} \sum_{(n, i) \in \mathcal{I}_t} \log \operatorname{softmax}\big(W_t h_{n,i} + b_t\big)_{y_{n,i}} . \]</div>
+    <p>Pour une tête par domaine, sur l'étendue \(D\) du domaine : \(\bar h = \frac{1}{|D|}\sum_{i \in D} h_i\). Pour une cible ensembliste \(S\) (allèles équivalents, module 1) :</p>
+    <div class="math-block">\[ \mathcal{L}_{\text{ens}} = -\log \sum_{a \in S} p_\theta(a \mid \bar h) = \operatorname{logsumexp}_{a}(z_a) - \operatorname{logsumexp}_{a \in S}(z_a). \]</div>
+    <h3>Hiérarchie par marginalisation</h3>
+    <p>Plutôt que des têtes indépendantes pour locus, sous-groupe et gène, qui peuvent se contredire, on prédit la distribution sur les feuilles (gènes) et on obtient les niveaux supérieurs en sommant : \(p(\text{IGHV3}) = \sum_{g \in \text{IGHV3}} p(g)\). La perte de niveau supérieur est une perte ensembliste avec \(S\) = les gènes du sous-groupe. La cohérence est garantie par construction.</p>
+
+    <h2 id="ponderation"><span class="num">4</span>Combiner les pertes</h2>
+    <p>La forme la plus simple est une somme pondérée \(\mathcal{L} = \sum_t w_t \mathcal{L}_t\). Le problème est d'échelle : une entropie croisée sur 20 gènes et une sur 300 positions n'ont ni la même valeur initiale (\(\ln 20 = 3{,}0\) contre \(\ln 300 = 5{,}7\)) ni la même vitesse de décroissance. Régler \(T\) poids par grille coûte \(K^T\) entraînements, soit \(5^6 = 15\,625\) pour 6 tâches et 5 valeurs.</p>
+    <h3>Incertitude homoscédastique : la dérivation</h3>
+    <p>Kendall, Gal et Cipolla (2018) partent d'une vraisemblance. Pour une tâche de régression avec bruit gaussien de variance \(\sigma^2\) indépendant de l'entrée (homoscédastique) :</p>
+    <div class="math-block">\[ p(y \mid f, \sigma) = \mathcal{N}(y;\, f, \sigma^2) \quad\Rightarrow\quad -\log p = \frac{\lVert y - f \rVert^2}{2\sigma^2} + \log \sigma + \text{cste}. \]</div>
+    <p>Pour plusieurs tâches indépendantes, les log-vraisemblances s'additionnent. Pour la classification, ils utilisent une softmax mise à l'échelle \(\operatorname{softmax}(f / \sigma^2)\) et l'approximation \(-\log p \approx \frac{1}{\sigma^2}\mathcal{L}_{\text{CE}} + \log \sigma\). Avec \(s_t = \log \sigma_t^2\), paramètre appris, on obtient pour des tâches de classification :</p>
+    <div class="math-block">\[ \mathcal{L}(\theta, s) = \sum_t \Big( e^{-s_t}\, \mathcal{L}_t(\theta) + \tfrac{1}{2} s_t \Big). \]</div>
+    <p>Le premier terme pèse chaque tâche par \(e^{-s_t} = 1/\sigma_t^2\) ; le second empêche la solution triviale \(\sigma_t \to \infty\). À \(\mathcal{L}_t\) fixé, l'optimum en \(s_t\) se calcule exactement :</p>
+    <div class="math-block">\[ \frac{\partial}{\partial s_t} = -e^{-s_t}\mathcal{L}_t + \tfrac12 = 0 \;\Rightarrow\; s_t^\star = \log(2\mathcal{L}_t), \qquad w_t^\star = \frac{1}{2\mathcal{L}_t}, \qquad w_t^\star \mathcal{L}_t = \tfrac12 . \]</div>
+    <div class="callout note"><span class="label">À retenir</span><p>À l'équilibre, chaque tâche contribue pour la même quantité \(1/2\) à la perte. La pondération par incertitude revient à <b>normaliser chaque perte par sa propre valeur</b>, avec un retard qui dépend du taux d'apprentissage de \(s_t\).</p></div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Trois tâches à un instant donné : région \(\mathcal{L} = 0{,}02\), position \(0{,}15\), gène \(1{,}2\). Poids d'équilibre : \(1/(2 \times 0{,}02) = 25\), \(1/0{,}30 = 3{,}33\), \(1/2{,}4 = 0{,}42\). La tête région, presque résolue, reçoit un poids 60 fois supérieur à celui du gène. Ses gradients, petits mais multipliés par 25, peuvent dominer la mise à jour de l'encodeur.</p>
+      <p>Avec la variante de Liebel et Körner (2018), \(\frac{1}{2}e^{-s}\mathcal{L} + \log(1 + e^{s})\), le poids d'une tâche à \(\mathcal{L} = 0{,}001\) est d'environ 22 au lieu de 500. Un plancher \(s_t \ge s_{\min}\) plafonne aussi le poids à \(e^{-s_{\min}}\).</p>
+    </div>
+
+    <figure class="panel">
+      <div class="controls">
+        <label for="variant">Méthode
+          <select id="variant">
+            <option value="kendall" selected>Kendall et al. (2018)</option>
+            <option value="liebel">Liebel et Körner (2018)</option>
+            <option value="floor">Kendall avec plancher s ≥ −1</option>
+            <option value="fixed">Poids fixes égaux</option>
+          </select>
+        </label>
+      </div>
+      <div class="weights-grid">
+        <div>
+          <div class="sliders">
+            <label for="l1">Région <input type="range" id="l1" min="-3.3" max="1" step="0.01" value="-1.7"><output id="o1"></output></label>
+            <label for="l2">Position IMGT <input type="range" id="l2" min="-3.3" max="1" step="0.01" value="-0.82"><output id="o2"></output></label>
+            <label for="l3">Gène V <input type="range" id="l3" min="-3.3" max="1" step="0.01" value="0.08"><output id="o3"></output></label>
+          </div>
+          <div class="table-wrap wtable" style="margin-top:12px"><table><thead><tr><th>Tâche</th><th class="num">\(\mathcal{L}_t\)</th><th class="num">poids</th><th class="num">contribution</th></tr></thead><tbody id="wbody"></tbody></table></div>
+        </div>
+        <div>
+          <svg id="curve" viewBox="0 0 320 220" role="img" aria-label="Objectif en fonction de s pour chaque tâche"></svg>
+        </div>
+      </div>
+      <figcaption><b>Poids d'équilibre.</b> Les curseurs règlent la perte de chaque tâche (échelle logarithmique). La figure trace le terme de chaque tâche en fonction de \(s\) ; le point marque son minimum \(s^\star\). Comparez les poids quand la tâche « région » devient presque parfaite.</figcaption>
+    </figure>
+
+    <h3>Dynamique pendant l'entraînement</h3>
+    <p>En pratique \(s_t\) est appris par descente de gradient en même temps que \(\theta\). L'animation simule des courbes de perte typiques : la région converge vite, la position plus lentement, le gène reste haut. On voit le poids de la région grimper à mesure qu'elle se résout, sauf avec plancher.</p>
+    <figure class="panel">
+      <div class="controls">
+        <button class="btn" type="button" id="simPlay">Lecture</button>
+        <div class="seg-btns" role="group" aria-label="Variante simulée">
+          <button class="btn ghost" type="button" id="simK" aria-pressed="true">Kendall</button>
+          <button class="btn ghost" type="button" id="simF" aria-pressed="false">Kendall + plancher</button>
+        </div>
+        <span class="kbd-hint" id="simStep"></span>
+      </div>
+      <svg id="sim" viewBox="0 0 640 240" role="img" aria-label="Évolution simulée des poids de tâche pendant l'entraînement"></svg>
+      <div class="legend"><span><i style="background:var(--cdr1)"></i>région</span><span><i style="background:var(--accent)"></i>position</span><span><i style="background:var(--cdr3)"></i>gène</span></div>
+      <figcaption><b>Simulation, pas un vrai entraînement.</b> Pertes synthétiques \(\mathcal{L}_t(k) = a_t e^{-k/\tau_t} + c_t\), descente de gradient sur \(s_t\) seule (taux 0,05), échelle logarithmique des poids.</figcaption>
+    </figure>
+
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span>
+      <p>Trois objections classiques à préparer :</p>
+      <ul>
+        <li>l'échelle dépend de la réduction : une perte sommée sur les résidus au lieu d'être moyennée change \(\mathcal{L}_t\), donc les poids. Fixer et documenter la réduction (moyenne par résidu étiqueté) ;</li>
+        <li>des études contrôlées (Kurin et al., 2022 ; Xin et al., 2022) trouvent qu'une somme pondérée bien réglée égale souvent les méthodes sophistiquées. La comparaison doit inclure des poids fixes réglés sur la validation, avec le même budget de calcul ;</li>
+        <li>plusieurs graines (au moins 3, idéalement 5) et des intervalles de confiance, car les différences entre schémas de pondération sont souvent petites.</li>
+      </ul>
+    </div>
+
+    <h2 id="etiquettes-manquantes"><span class="num">5</span>Étiquettes manquantes</h2>
+    <p>Toutes les séquences n'ont pas toutes les étiquettes : une structure PDB a une numérotation mais parfois pas d'allèle fiable, une séquence de répertoire TR n'a pas de domaine C. Chaque perte est donc moyennée sur les exemples qui portent l'étiquette :</p>
+    <div class="math-block">\[ \mathcal{L}_t = \frac{1}{|B_t|} \sum_{n \in B_t} \ell_t(n), \qquad B_t = \{ n \in \text{lot} : y^{(t)}_n \text{ connu} \}. \]</div>
+    <p>Si \(B_t\) est vide, la tâche est <strong>absente</strong> du lot : ni sa perte ni son terme \(\tfrac12 s_t\) ne sont ajoutés. Sinon, le terme seul pousserait \(s_t\) vers \(-\infty\) à chaque lot sans étiquette. Le code de <code>task_losses</code> applique cette règle.</p>
+
+    <h2 id="decodage"><span class="num">6</span>Décodage monotone de la numérotation</h2>
+    <p>La tête de position prédit indépendamment chaque résidu. L'argmax peut donc produire deux fois 111, ou 112.1 après 112. Comme le vocabulaire est rangé dans l'ordre de séquence (module 2), une numérotation valide est une suite d'indices strictement croissante, à l'exception de l'étiquette 0 (UNNUMBERED) permise partout. On cherche</p>
+    <div class="math-block">\[ \hat y = \arg\max_{y} \sum_{i=1}^{L} \log p_\theta(y_i \mid x) \quad \text{s.c.} \quad i < j,\; y_i, y_j \neq 0 \;\Rightarrow\; y_i < y_j . \]</div>
+    <p>Programmation dynamique : \(B_i(k)\) est le meilleur score des résidus \(1..i\) dont la dernière position numérotée est \(k\).</p>
+    <div class="math-block">\[ B_i(k) = \max\Big( B_{i-1}(k) + \log p(0 \mid i),\;\; \log p(k \mid i) + \max_{k' < k} B_{i-1}(k') \Big), \qquad B_0(0) = 0 . \]</div>
+    <p>Le maximum préfixe \(\max_{k'<k}\) se calcule par cumul, d'où un coût \(O(LK)\) : environ \(130 \times 260 \approx 34\,000\) opérations pour un VH, négligeable devant l'encodeur.</p>
+    <figure class="panel">
+      <div class="controls">
+        <button class="btn" type="button" id="showArg">Argmax</button>
+        <button class="btn ghost" type="button" id="showVit">Décodage monotone</button>
+        <span class="kbd-hint" id="dpInfo"></span>
+      </div>
+      <div class="scroll-x"><table class="dp" id="dp"></table></div>
+      <figcaption><b>Exemple du test unitaire.</b> Probabilités par résidu (lignes) sur 5 positions consécutives (colonnes, 0 = UNNUMBERED). L'argmax (cadres rouges) répète la position 2 ; le décodage monotone (cases pleines) choisit 1, 2, 3, 5 pour un produit de probabilités maximal parmi les numérotations valides.</figcaption>
+    </figure>
+    <p>Deux contraintes supplémentaires se greffent sans changer l'algorithme : un masque des positions permises selon le type de domaine prédit (pas de 46–76 dans un domaine C), et un contrôle a posteriori que les positions des CDR respectent la règle du module 2 pour leur longueur.</p>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>Le décodage par résidu indépendant suivi d'un DP suppose que les erreurs sont locales. Une alternative est un CRF linéaire entraîné de bout en bout (transitions apprises), ou une formulation par alignement. À comparer en ablation si le décodage monotone laisse des erreurs systématiques aux bornes des CDR.</p></div>
+
+    <h2 id="ablations"><span class="num">7</span>Plan d'ablation</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Facteur</th><th>Niveaux</th><th>Question</th></tr></thead>
+        <tbody>
+          <tr><td>Multi-tâche</td><td>mono-tâche × 6 ; MTL complet ; MTL sans une tête</td><td>quelles tâches s'aident ou se gênent ?</td></tr>
+          <tr><td>Pondération</td><td>égale ; fixe réglée ; Kendall ; Liebel ; Kendall + plancher</td><td>la pondération apprise vaut-elle mieux qu'un réglage ?</td></tr>
+          <tr><td>Décodage</td><td>argmax ; monotone ; monotone + masque de domaine</td><td>combien d'erreurs le DP corrige-t-il ?</td></tr>
+          <tr><td>Pré-entraînement</td><td>base ; DAPT ; DAPT + TAPT</td><td>apport du domaine (module 4)</td></tr>
+          <tr><td>Encodeur</td><td>gelé + têtes ; LoRA ; fine-tuning complet</td><td>coût contre performance</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Chaque cellule : au moins trois graines, évaluée sur toutes les couches de test du module 3. Les comparaisons se font par tests appariés sur les mêmes séquences (module 6).</p>
+
+    <h2 id="code"><span class="num">8</span>Le code</h2>
+    <pre data-lang="python" data-file="src/protannotml/models/mtl.py (extrait)"><code>class UncertaintyWeighting(nn.Module):
+    """Learned homoscedastic task uncertainty, s_t = log sigma_t^2."""
+
+    def __init__(self, task_kinds, variant="kendall", s_init=0.0, s_min=None):
+        super().__init__()
+        self.kinds, self.variant, self.s_min = dict(task_kinds), variant, s_min
+        self.log_vars = nn.ParameterDict(
+            {k: nn.Parameter(torch.tensor(float(s_init))) for k in task_kinds})
+
+    def forward(self, losses):
+        total = torch.zeros((), device=next(iter(losses.values())).device)
+        weights = {}
+        for k, L in losses.items():          # absent tasks are simply not in `losses`
+            s = self.log_vars[k]
+            if self.s_min is not None:
+                s = s.clamp_min(self.s_min)   # caps the weight at exp(-s_min)
+            if self.variant == "kendall":
+                w = torch.exp(-s) if self.kinds[k] == "classification" else 0.5 * torch.exp(-s)
+                total = total + w * L + 0.5 * s
+            else:                             # Liebel & Koerner: bounded weights
+                w = 0.5 * torch.exp(-s)
+                total = total + w * L + F.softplus(s)
+            weights[k] = float(w.detach())
+        return total, weights</code></pre>
+    <pre data-lang="python" data-file="boucle d'entraînement (esquisse)"><code>model = ProtAnnotModel(encoder, d_model=1280, tasks=TASKS)
+weighting = UncertaintyWeighting({t.name: "classification" for t in TASKS}, variant="kendall", s_min=-1.0)
+optim = torch.optim.AdamW(parameter_groups(model, weighting, lr_encoder=2e-5, lr_heads=1e-3, lr_weights=1e-2))
+
+for batch in loader:
+    out = model(batch["input_ids"], batch["attention_mask"], batch["domain_span_mask"])
+    losses = task_losses(out, batch, model.tasks)       # dict of per-task means
+    total, weights = weighting(losses)
+    optim.zero_grad()
+    total.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optim.step()
+    log({"loss/" + k: v.item() for k, v in losses.items()} | {"w/" + k: w for k, w in weights.items()})</code></pre>
+    <pre data-lang="python" data-file="src/protannotml/decoding/monotonic.py (usage, testé)"><code>from protannotml.decoding.monotonic import monotonic_decode
+
+logp = log_softmax(position_logits)                 # (L, K), vocabulary in sequence order
+labels, score = monotonic_decode(logp, allowed=allowed_by_domain_type)
+positions = [vocab.labels[k] for k in labels]       # e.g. ['1', '2', ..., '111', '111.1', '112.1', '112', ...]</code></pre>
+
+    <h2 id="quiz"><span class="num">9</span>Auto-évaluation</h2>
+    <details class="check"><summary>À l'équilibre de Kendall, quelle est la contribution pondérée de chaque tâche de classification ?</summary><p>\(1/2\), puisque \(w_t^\star = 1/(2\mathcal{L}_t)\).</p></details>
+    <details class="check"><summary>Pourquoi omettre le terme \(\tfrac12 s_t\) d'une tâche sans étiquette dans le lot ?</summary><p>Seul, ce terme a un gradient constant \(+\tfrac12\) qui pousse \(s_t\) vers \(-\infty\), donc le poids de la tâche vers l'infini.</p></details>
+    <details class="check"><summary>Comment garantir que locus, sous-groupe et gène prédits sont cohérents ?</summary><p>En prédisant seulement la distribution sur les gènes et en marginalisant pour les niveaux supérieurs.</p></details>
+    <details class="check"><summary>Quel est le coût du décodage monotone pour \(L\) résidus et \(K\) étiquettes ?</summary><p>\(O(LK)\) grâce au maximum préfixe.</p></details>
+
+    <h2 id="sources"><span class="num">10</span>Sources</h2>
+    <ol class="sources">
+      <li>Caruana R (1997) Multitask learning. <i>Machine Learning</i> 28:41–75.</li>
+      <li>Kendall A, Gal Y, Cipolla R (2018) Multi-task learning using uncertainty to weigh losses for scene geometry and semantics. <i>CVPR</i>. <a href="https://openaccess.thecvf.com/content_cvpr_2018/papers/Kendall_Multi-Task_Learning_Using_CVPR_2018_paper.pdf">PDF</a></li>
+      <li>Liebel L, Körner M (2018) Auxiliary tasks in multi-task learning. <i>arXiv</i>:1805.06334.</li>
+      <li>Chen Z, et al. (2018) GradNorm: gradient normalization for adaptive loss balancing in deep multitask networks. <i>ICML</i>.</li>
+      <li>Yu T, et al. (2020) Gradient surgery for multi-task learning. <i>NeurIPS</i>.</li>
+      <li>Kurin V, et al. (2022) In defense of the unitary scalarization for deep multi-task learning. <i>NeurIPS</i>. <a href="https://arxiv.org/abs/2201.04122">arXiv</a></li>
+      <li>Xin D, et al. (2022) Do current multi-task optimization methods in deep learning even help? <i>NeurIPS</i>. <a href="https://arxiv.org/abs/2209.11379">arXiv</a></li>
+      <li>Lafferty J, McCallum A, Pereira F (2001) Conditional random fields. <i>ICML</i>.</li>
+    </ol>
+
+    <nav class="pager" aria-label="Navigation entre modules">
+      <a class="prev" href="m4.html"><small>Module précédent</small>MLM : DAPT puis TAPT</a>
+      <a class="next" href="m6.html"><small>Module suivant</small>Évaluation et statistiques</a>
+    </nav>
+  </main>
+</div>
+
+<script>
+/* ---------- Architecture diagram ---------- */
+(() => {
+  const root = document.getElementById("arch");
+  const box = (x, y, w, h, fill, stroke, label, sub, txtFill) => {
+    PA.svg("rect", { x, y, width: w, height: h, rx: 6, fill, stroke: stroke || "none", "stroke-width": 1.2 }, root);
+    PA.svg("text", { x: x + w / 2, y: y + (sub ? h / 2 - 2 : h / 2 + 4), "text-anchor": "middle", "font-size": 12, "font-weight": 700, fill: txtFill || "var(--ink)", "font-family": "var(--f-body)", text: label }, root);
+    if (sub) PA.svg("text", { x: x + w / 2, y: y + h / 2 + 13, "text-anchor": "middle", "font-size": 10, fill: txtFill || "var(--muted)", "font-family": "var(--f-body)", text: sub }, root);
+  };
+  const arrow = (x1, y1, x2, y2) => {
+    PA.svg("path", { d: `M ${x1} ${y1} L ${x2} ${y2}`, stroke: "var(--muted)", "stroke-width": 1.4, fill: "none", "marker-end": "url(#ah)" }, root);
+  };
+  const defs = PA.svg("defs", {}, root);
+  const mk = PA.svg("marker", { id: "ah", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+  PA.svg("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "var(--muted)" }, mk);
+  // input sequence
+  const seq = "EVQLVESGG…CSRWGGDGFYAMDYWGQG…";
+  PA.svg("text", { x: 20, y: 30, "font-size": 11, class: "svg-muted", text: "séquence (une ou plusieurs régions de domaines)" }, root);
+  box(20, 40, 250, 30, "var(--paper-2)", "var(--rule)", seq);
+  arrow(145, 72, 145, 92);
+  box(20, 94, 250, 54, "var(--ink)", null, "Encodeur PLM partagé", "après DAPT (et TAPT)", "var(--paper)");
+  arrow(145, 150, 145, 170);
+  box(20, 172, 250, 30, "var(--accent-soft)", "var(--accent)", "h₁ … h_L  (un vecteur par résidu)");
+  // token heads
+  const tokenHeads = [["Région", "FR / CDR"], ["Position IMGT", "+ décodage monotone"], ["Type de domaine", "segmentation"], ["Segment", "V · N/D · J · C"]];
+  tokenHeads.forEach(([a, b], i) => {
+    const x = 320, y = 30 + i * 52;
+    box(x, y, 180, 42, "var(--panel)", "var(--vcol)", a, b);
+    PA.svg("path", { d: `M 272 187 C 296 187, 296 ${y + 21}, ${x - 2} ${y + 21}`, stroke: "var(--muted)", "stroke-width": 1.2, fill: "none", "marker-end": "url(#ah)" }, root);
+  });
+  PA.svg("text", { x: 410, y: 20, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "var(--vcol)", "font-family": "var(--f-body)", text: "TÊTES PAR RÉSIDU" }, root);
+  // pooling
+  box(320, 250, 180, 44, "var(--paper-2)", "var(--rule)", "Moyenne sur le domaine", "étendue vraie ou prédite");
+  PA.svg("path", { d: "M 145 204 C 145 272, 250 272, 318 272", stroke: "var(--muted)", "stroke-width": 1.2, fill: "none", "marker-end": "url(#ah)" }, root);
+  PA.svg("path", { d: "M 410 228 L 410 248", stroke: "var(--muted)", "stroke-width": 1.2, fill: "none", "stroke-dasharray": "3 3", "marker-end": "url(#ah)" }, root);
+  const domHeads = [["Gène V / J", "→ sous-groupe, locus"], ["Allèle", "ensemble équivalent"], ["Espèce", ""]];
+  domHeads.forEach(([a, b], i) => {
+    const x = 560, y = 170 + i * 52;
+    box(x, y, 180, 42, "var(--panel)", "var(--cdr3)", a, b || null);
+    PA.svg("path", { d: `M 502 272 C 530 272, 530 ${y + 21}, ${x - 2} ${y + 21}`, stroke: "var(--muted)", "stroke-width": 1.2, fill: "none", "marker-end": "url(#ah)" }, root);
+  });
+  PA.svg("text", { x: 650, y: 160, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "var(--cdr3)", "font-family": "var(--f-body)", text: "TÊTES PAR DOMAINE" }, root);
+  box(560, 40, 180, 74, "var(--paper-2)", "var(--rule)", "Perte totale", "Σ pondérée ou incertitude");
+  PA.svg("path", { d: "M 502 100 L 558 80", stroke: "var(--muted)", "stroke-width": 1.2, fill: "none", "marker-end": "url(#ah)" }, root);
+  PA.svg("path", { d: "M 650 168 L 650 116", stroke: "var(--muted)", "stroke-width": 1.2, fill: "none", "marker-end": "url(#ah)" }, root);
+})();
+
+/* ---------- Weighting widget ---------- */
+(() => {
+  const names = ["Région", "Position IMGT", "Gène V"];
+  const colors = ["var(--cdr1)", "var(--accent)", "var(--cdr3)"];
+  const sliders = [1, 2, 3].map((i) => document.getElementById("l" + i));
+  const outs = [1, 2, 3].map((i) => document.getElementById("o" + i));
+  const variant = document.getElementById("variant");
+  const body = document.getElementById("wbody"), curve = document.getElementById("curve");
+  const termK = (L, s) => Math.exp(-s) * L + 0.5 * s;
+  const termL = (L, s) => 0.5 * Math.exp(-s) * L + Math.log1p(Math.exp(s));
+  const sStarL = (L) => { const a = 0.5 * L; return Math.log((a + Math.sqrt(a * a + 4 * a)) / 2); };
+  function solve(L, v) {
+    if (v === "kendall") { const s = Math.log(2 * L); return { s, w: Math.exp(-s) }; }
+    if (v === "floor") { const s = Math.max(-1, Math.log(2 * L)); return { s, w: Math.exp(-s) }; }
+    if (v === "liebel") { const s = sStarL(L); return { s, w: 0.5 * Math.exp(-s) }; }
+    return { s: 0, w: 1 };
+  }
+  const fmt = (x, d = 3) => x.toFixed(d).replace(".", ",");
+  function render() {
+    const v = variant.value;
+    const Ls = sliders.map((s) => Math.pow(10, +s.value));
+    Ls.forEach((L, i) => (outs[i].textContent = fmt(L, L < 0.01 ? 4 : 3)));
+    body.innerHTML = "";
+    const sol = Ls.map((L) => solve(L, v));
+    Ls.forEach((L, i) => {
+      const tr = PA.html("tr", {}, body);
+      PA.html("td", { html: `<span style="color:${colors[i]};font-weight:700">●</span> ${names[i]}` }, tr);
+      PA.html("td", { class: "num", text: fmt(L, L < 0.01 ? 4 : 3) }, tr);
+      PA.html("td", { class: "num", text: fmt(sol[i].w, 2) }, tr);
+      PA.html("td", { class: "num", text: fmt(sol[i].w * L, 3) }, tr);
+    });
+    // curves
+    curve.innerHTML = "";
+    const x0 = 36, y0 = 12, w = 270, h = 170, sMin = -8, sMax = 3;
+    const term = v === "liebel" ? termL : termK;
+    const all = [];
+    Ls.forEach((L) => { for (let s = sMin; s <= sMax; s += 0.1) all.push(term(L, s)); });
+    const yMin = Math.min(...all), yMax = Math.min(Math.max(...all), yMin + 6);
+    const X = (s) => x0 + (s - sMin) / (sMax - sMin) * w, Y = (val) => y0 + h - (Math.min(val, yMax) - yMin) / (yMax - yMin) * h;
+    PA.svg("line", { x1: x0, x2: x0 + w, y1: y0 + h, y2: y0 + h, stroke: "var(--rule)" }, curve);
+    PA.svg("line", { x1: x0, x2: x0, y1: y0, y2: y0 + h, stroke: "var(--rule)" }, curve);
+    [-8, -6, -4, -2, 0, 2].forEach((s) => PA.svg("text", { x: X(s), y: y0 + h + 14, "text-anchor": "middle", "font-size": 9.5, class: "svg-muted", text: s }, curve));
+    PA.svg("text", { x: x0 + w, y: y0 + h + 28, "text-anchor": "end", "font-size": 9.5, class: "svg-muted", text: "s = log σ²" }, curve);
+    PA.svg("text", { x: x0 - 4, y: y0 + 8, "text-anchor": "end", "font-size": 9.5, class: "svg-muted", text: "terme" }, curve);
+    if (v === "fixed") {
+      PA.svg("text", { x: x0 + w / 2, y: y0 + h / 2, "text-anchor": "middle", "font-size": 11, class: "svg-muted", text: "pas de paramètre s en poids fixes" }, curve);
+      return;
+    }
+    if (v === "floor") PA.svg("rect", { x: X(sMin), y: y0, width: X(-1) - X(sMin), height: h, fill: "var(--paper-2)" }, curve);
+    Ls.forEach((L, i) => {
+      let d = "";
+      for (let s = sMin, k = 0; s <= sMax + 1e-9; s += 0.05, k++) d += `${k ? "L" : "M"} ${X(s).toFixed(1)} ${Y(term(L, s)).toFixed(1)} `;
+      PA.svg("path", { d, fill: "none", stroke: colors[i], "stroke-width": 2 }, curve);
+      const s = sol[i].s;
+      PA.svg("circle", { cx: X(s), cy: Y(term(L, s)), r: 4.5, fill: colors[i], stroke: "var(--panel)", "stroke-width": 1.5 }, curve);
+    });
+  }
+  sliders.forEach((s) => s.addEventListener("input", render));
+  variant.addEventListener("change", render);
+  render();
+})();
+
+/* ---------- Training dynamics simulation ---------- */
+(() => {
+  const root = document.getElementById("sim"), lbl = document.getElementById("simStep");
+  const btn = document.getElementById("simPlay"), bK = document.getElementById("simK"), bF = document.getElementById("simF");
+  const tasks = [{ a: 1.9, tau: 120, c: 0.004, col: "var(--cdr1)" }, { a: 5.0, tau: 600, c: 0.08, col: "var(--accent)" }, { a: 3.5, tau: 1500, c: 0.9, col: "var(--cdr3)" }];
+  const steps = 3000;
+  let floor = false, k = steps - 1, timer = null;
+  function trajectory() {
+    const s = [0, 0, 0], tr = [];
+    for (let t = 0; t < steps; t++) {
+      tasks.forEach((tk, i) => {
+        const L = tk.a * Math.exp(-t / tk.tau) + tk.c;
+        s[i] -= 0.05 * (-Math.exp(-s[i]) * L + 0.5);
+        if (floor) s[i] = Math.max(-1, s[i]);
+      });
+      tr.push(s.map((v) => Math.exp(-v)));
+    }
+    return tr;
+  }
+  let tr = trajectory();
+  function draw() {
+    root.innerHTML = "";
+    const x0 = 46, y0 = 12, w = 570, h = 190;
+    const lo = Math.log10(0.1), hi = Math.log10(300);
+    const X = (t) => x0 + t / (steps - 1) * w, Y = (wt) => y0 + h - (Math.log10(Math.max(wt, 0.1)) - lo) / (hi - lo) * h;
+    [0.1, 1, 10, 100].forEach((v) => {
+      PA.svg("line", { x1: x0, x2: x0 + w, y1: Y(v), y2: Y(v), stroke: "var(--rule)", "stroke-dasharray": v === 1 ? "" : "2 3" }, root);
+      PA.svg("text", { x: x0 - 6, y: Y(v) + 3, "text-anchor": "end", "font-size": 9.5, class: "svg-muted", text: String(v).replace(".", ",") }, root);
+    });
+    [0, 1000, 2000, 3000].forEach((t) => PA.svg("text", { x: X(Math.min(t, steps - 1)), y: y0 + h + 14, "text-anchor": "middle", "font-size": 9.5, class: "svg-muted", text: t }, root));
+    PA.svg("text", { x: x0 + w, y: y0 + h + 28, "text-anchor": "end", "font-size": 9.5, class: "svg-muted", text: "pas d'entraînement" }, root);
+    PA.svg("text", { x: x0, y: y0 + 2, "font-size": 9.5, class: "svg-muted", text: "poids e^(−s), log" }, root);
+    tasks.forEach((tk, i) => {
+      let d = "";
+      for (let t = 0; t <= k; t += 10) d += `${t ? "L" : "M"} ${X(t).toFixed(1)} ${Y(tr[t][i]).toFixed(1)} `;
+      PA.svg("path", { d, fill: "none", stroke: tk.col, "stroke-width": 2.2 }, root);
+      PA.svg("circle", { cx: X(k), cy: Y(tr[k][i]), r: 4, fill: tk.col }, root);
+      PA.svg("text", { x: Math.min(X(k) + 8, x0 + w - 30), y: Y(tr[k][i]) - 6, "font-size": 10, fill: tk.col, "font-family": "var(--f-mono)", text: tr[k][i].toFixed(1).replace(".", ",") }, root);
+    });
+    lbl.textContent = `pas ${k + 1} / ${steps}`;
+  }
+  function play() {
+    if (timer) { clearInterval(timer); timer = null; btn.textContent = "Lecture"; return; }
+    if (k >= steps - 1) k = 0;
+    btn.textContent = "Pause";
+    timer = setInterval(() => { k = Math.min(steps - 1, k + 30); draw(); if (k >= steps - 1) { clearInterval(timer); timer = null; btn.textContent = "Lecture"; } }, PA.reducedMotion() ? 120 : 40);
+  }
+  btn.addEventListener("click", play);
+  bK.addEventListener("click", () => { floor = false; bK.setAttribute("aria-pressed", "true"); bF.setAttribute("aria-pressed", "false"); tr = trajectory(); draw(); });
+  bF.addEventListener("click", () => { floor = true; bF.setAttribute("aria-pressed", "true"); bK.setAttribute("aria-pressed", "false"); tr = trajectory(); draw(); });
+  draw();
+})();
+
+/* ---------- Monotonic decoding demo ---------- */
+(() => {
+  const P = [[0.01, 0.90, 0.03, 0.02, 0.02, 0.02], [0.01, 0.02, 0.50, 0.45, 0.01, 0.01], [0.01, 0.02, 0.60, 0.30, 0.05, 0.02], [0.01, 0.01, 0.02, 0.03, 0.03, 0.90]];
+  const L = P.length, K = P[0].length;
+  const logp = P.map((r) => r.map(Math.log));
+  // DP (same recurrence as monotonic_decode)
+  function decode() {
+    let B = new Array(K).fill(-Infinity); B[0] = 0;
+    const back = [];
+    for (let i = 0; i < L; i++) {
+      const nb = new Array(K).fill(-Infinity), bc = new Array(K).fill(0), bp = new Array(K).fill(0);
+      for (let k = 0; k < K; k++) { nb[k] = B[k] + logp[i][0]; bc[k] = 0; bp[k] = k; }
+      let best = -Infinity, arg = 0;
+      for (let k = 1; k < K; k++) {
+        if (B[k - 1] >= best) { best = B[k - 1]; arg = k - 1; }
+        const c = best + logp[i][k];
+        if (c > nb[k]) { nb[k] = c; bc[k] = k; bp[k] = arg; }
+      }
+      back.push([bc, bp]); B = nb;
+    }
+    let st = B.indexOf(Math.max(...B)); const lab = new Array(L);
+    for (let i = L - 1; i >= 0; i--) { lab[i] = back[i][0][st]; st = back[i][1][st]; }
+    return lab;
+  }
+  const vit = decode();
+  const arg = P.map((r) => r.indexOf(Math.max(...r)));
+  const table = document.getElementById("dp"), info = document.getElementById("dpInfo");
+  function render(mode) {
+    table.innerHTML = "";
+    const thead = PA.html("tr", {}, table);
+    PA.html("th", { text: "" }, thead);
+    for (let k = 0; k < K; k++) PA.html("th", { text: k === 0 ? "0" : "pos " + k }, thead);
+    P.forEach((row, i) => {
+      const tr = PA.html("tr", {}, table);
+      PA.html("th", { text: "résidu " + (i + 1) }, tr);
+      row.forEach((p, k) => {
+        const cls = [mode === "arg" && arg[i] === k ? "argmax" : "", mode === "vit" && vit[i] === k ? "path" : "", mode === "vit" && arg[i] === k && vit[i] !== k ? "argmax" : ""].filter(Boolean).join(" ");
+        PA.html("td", { class: cls, text: p.toFixed(2).replace(".", ",") }, tr);
+      });
+    });
+    const prod = (lab) => lab.reduce((a, k, i) => a * P[i][k], 1);
+    info.textContent = mode === "arg"
+      ? `argmax = [${arg.join(", ")}] : invalide (2 répété), produit ${prod(arg).toExponential(2)}`
+      : `monotone = [${vit.join(", ")}] : valide, produit ${prod(vit).toExponential(2)}`;
+  }
+  document.getElementById("showArg").addEventListener("click", () => render("arg"));
+  document.getElementById("showVit").addEventListener("click", () => render("vit"));
+  render("vit");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partitionnement anti-fuite</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.js"></script>
+<style>
+  .graph-wrap { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .graph-wrap { grid-template-columns: minmax(0, 1fr); } }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: start; }
+  .stat { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; background: var(--paper); }
+  .stat small { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .stat b { font-family: var(--f-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+  .stat.bad b { color: var(--crit); }
+  .stat.good b { color: var(--ok); }
+  .seg-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .seg-btns button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .layers { display: grid; gap: 0; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; background: var(--panel); }
+  .layer { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--rule); align-items: start; }
+  .layer:last-child { border-bottom: 0; }
+  .layer .lv { font-family: var(--f-display); font-size: 1.6rem; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
+  .layer h4 { margin: 0 0 4px; font-family: var(--f-display); font-size: 1.1rem; }
+  .layer p { margin: 0; font-size: var(--s-0); color: var(--ink-2); }
+  .layer .q { font-size: var(--s-0); color: var(--ink); background: var(--paper-2); border-radius: 4px; padding: 8px 10px; }
+  @media (max-width: 680px) { .layer { grid-template-columns: 40px minmax(0, 1fr); } .layer .q { grid-column: 2; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Module 3 sur 6</span>
+    <nav aria-label="Modules">
+      <a href="index.html">Accueil</a>
+      <a href="m1.html">1</a><a href="m2.html">2</a><a href="m3.html" aria-current="page">3</a><a href="m4.html">4</a><a href="m5.html">5</a><a href="m6.html">6</a>
+    </nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="toc" aria-label="Sommaire"><h2>Sommaire</h2><ol></ol></aside>
+  <main class="article">
+    <p class="eyebrow">Module 3 · Protocole</p>
+    <h1>Partitionnement anti-fuite avec MMseqs2</h1>
+    <p class="lede">Les séquences d'IG et de TR dérivent d'un nombre limité de gènes germinaux : elles se ressemblent toutes. Un découpage aléatoire mesure surtout la mémoire du modèle. Ce module construit des partitions qui mesurent sa capacité à généraliser, et la manière de le prouver.</p>
+    <p class="meta-row"><span><b>Durée</b> 75 min</span><span><b>Prérequis</b> modules 1 et 2</span><span><b>Code</b> <code>protannotml.data.partition</code></span><span><b>Outil</b> MMseqs2 release 18</span></p>
+
+    <h2 id="fuites"><span class="num">1</span>Six façons de fuir</h2>
+    <p>Une fuite (<i>leakage</i>) est toute information sur l'ensemble de test qui atteint le modèle pendant sa conception. Elle gonfle les scores sans améliorer le modèle. Dans ce projet, six formes sont plausibles :</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Forme</th><th>Mécanisme</th><th>Parade</th></tr></thead>
+        <tbody>
+          <tr><td>Doublons</td><td>même séquence (ou membre du même clone) en train et en test</td><td>dédoublonnage, regroupement des clones</td></tr>
+          <tr><td>Homologie</td><td>séquences à 95 % d'identité de part et d'autre</td><td>split par composantes connexes</td></tr>
+          <tr><td>Groupe biologique</td><td>même gène germinal, même espèce des deux côtés</td><td>hold-out de gènes, d'espèces, de loci</td></tr>
+          <tr><td>Pré-entraînement</td><td>DAPT ou TAPT sur des séquences de test, même sans étiquettes</td><td>filtrer les corpus contre val et test</td></tr>
+          <tr><td>Modèle de base</td><td>ESM et consorts ont vu UniRef, qui contient des IG</td><td>hold-out temporel, ablation sans pré-entraînement</td></tr>
+          <tr><td>Sélection</td><td>hyperparamètres choisis sur le test</td><td>validation séparée, test consulté une seule fois</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>La fuite par pré-entraînement est la plus sournoise : un MLM qui a appris à reconstruire une séquence de test la « connaît », même s'il n'a jamais vu son annotation. Hermann et al. (2024) l'ont mesurée sur des tâches protéiques en aval.</p>
+
+    <h2 id="identite"><span class="num">2</span>Mesurer la similarité</h2>
+    <p>« 90 % d'identité » n'a de sens qu'avec un dénominateur et une couverture. Pour deux séquences \(x\) et \(y\) alignées, avec \(n_{\text{id}}\) positions identiques et une longueur d'alignement \(\ell_{\text{aln}}\) :</p>
+    <div class="math-block">\[ \text{id}_{\text{aln}} = \frac{n_{\text{id}}}{\ell_{\text{aln}}}, \qquad \text{id}_{\min} = \frac{n_{\text{id}}}{\min(|x|,|y|)}, \qquad \text{id}_{\max} = \frac{n_{\text{id}}}{\max(|x|,|y|)} \]</div>
+    <div class="math-block">\[ \text{cov}_x = \frac{\text{résidus de } x \text{ couverts}}{|x|}, \qquad \text{cov}_y = \frac{\text{résidus de } y \text{ couverts}}{|y|}. \]</div>
+    <p>MMseqs2 appelle la première <code>fident</code> (<code>--seq-id-mode 0</code>). Avec <code>--cov-mode 0</code>, il exige la couverture <code>-c</code> sur les deux séquences ; c'est le bon choix pour comparer des domaines entiers.</p>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Un VH de 120 résidus et un fragment de 70 résidus s'alignent sur 68 positions, dont 66 identiques. \(\text{id}_{\text{aln}} = 66/68 = 97{,}1\,\%\) et \(\text{id}_{\max} = 66/120 = 55\,\%\). Les couvertures valent \(68/120 = 0{,}57\) et \(68/70 = 0{,}97\). Avec <code>-c 0.8 --cov-mode 0</code>, l'arête est refusée : un fragment ne relie pas deux domaines entiers. Avec <code>--cov-mode 1</code> (couverture de la cible seulement), elle serait acceptée.</p>
+    </div>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>Sur quelle région calculez-vous l'identité ? Deux anticorps issus du même gène IGHV diffèrent surtout par la CDR3. Sur le domaine entier, ils peuvent tomber sous le seuil alors que leurs FR, qui portent l'essentiel de la numérotation, sont quasi identiques. Rapporter les deux : identité sur le domaine et identité sur les FR seules.</p></div>
+
+    <h2 id="representant-vs-composantes"><span class="num">3</span>Représentants ou composantes connexes</h2>
+    <p>Le clustering usuel (CD-HIT, MMseqs2 <code>--cluster-mode 0</code>) choisit des représentants et y rattache les séquences à au moins \(t\) d'identité. Il garantit seulement</p>
+    <div class="math-block">\[ \forall i : \; \text{sim}\big(i, \text{rep}(i)\big) \ge t . \]</div>
+    <p>Rien n'empêche deux membres de clusters différents d'être plus proches que \(t\). Si l'on répartit ces clusters entre train et test, la fuite persiste. Les composantes connexes du graphe \(G_t = (V, \{(i,j) : \text{sim}(i,j) \ge t\})\) (MMseqs2 <code>--cluster-mode 1</code>, ou union-find sur une recherche complète) donnent la propriété voulue :</p>
+    <div class="math-block">\[ \forall a \neq b,\; \forall i \in S_a,\; \forall j \in S_b : \quad \text{sim}(i, j) < t . \]</div>
+    <p>Elle vaut à la sensibilité de la recherche près : une paire jamais alignée est une arête manquante.</p>
+
+    <figure class="panel">
+      <div class="controls">
+        <div class="seg-btns" role="group" aria-label="Méthode de regroupement">
+          <button class="btn ghost" type="button" id="modeRep" aria-pressed="true">Représentants</button>
+          <button class="btn ghost" type="button" id="modeCC" aria-pressed="false">Composantes connexes</button>
+        </div>
+        <label for="thr">Seuil \(t\) <input type="range" id="thr" min="70" max="98" value="90"><output id="thrOut">0,90</output></label>
+        <button class="btn ghost" type="button" id="reseed">Nouveau tirage</button>
+      </div>
+      <div class="graph-wrap">
+        <div class="scroll-x"><svg id="graph" viewBox="0 0 480 360" role="img" aria-label="Graphe de similarité entre séquences, coloré par partition"></svg></div>
+        <div>
+          <div class="stats">
+            <div class="stat"><small>Groupes</small><b id="stGroups">0</b></div>
+            <div class="stat"><small>Plus grand groupe</small><b id="stGiant">0</b></div>
+            <div class="stat"><small>Part du test</small><b id="stTest">0</b></div>
+            <div class="stat" id="stViolBox"><small>Paires ≥ t entre train et test</small><b id="stViol">0</b></div>
+          </div>
+          <svg id="perco" viewBox="0 0 300 170" role="img" aria-label="Taille de la plus grande composante selon le seuil" style="margin-top:12px"></svg>
+        </div>
+      </div>
+      <div class="legend" style="margin-top:8px"><span><i style="background:var(--accent)"></i>train</span><span><i style="background:var(--cdr2)"></i>test</span><span><i style="background:var(--crit);border-radius:1px;height:3px;width:16px"></i>arête qui fuit</span></div>
+      <figcaption><b>Graphe synthétique de 48 séquences.</b> Deux points sont reliés si leur identité (fonction de la distance) dépasse \(t\). Les groupes, mélangés au hasard, sont répartis à 70/30 sans être coupés. En mode représentants, des arêtes rouges traversent la frontière ; en mode composantes, jamais. La courbe montre la part de la plus grande composante quand \(t\) baisse : la composante géante apparaît brutalement.</figcaption>
+    </figure>
+
+    <h2 id="geante"><span class="num">4</span>La composante géante</h2>
+    <p>La liaison simple est transitive : A proche de B, B proche de C, donc A, B et C ensemble, même si A et C sont éloignés. Quand \(t\) baisse, les composantes fusionnent de proche en proche jusqu'à former une composante géante, comme en percolation. Pour les domaines V d'IG, dérivés de quelques dizaines de gènes germinaux par espèce, ce basculement arrive à des seuils élevés.</p>
+    <p>On ne peut donc pas imposer un seuil bas (30 ou 40 %, courant pour les protéines générales) à tout le jeu de données. Trois leviers, à combiner et à documenter :</p>
+    <ol>
+      <li><strong>monter \(t\)</strong> jusqu'à ce que la plus grande composante reste sous une fraction cible (par exemple 20 %) ;</li>
+      <li><strong>retirer des ponts</strong> : les quelques séquences de fort degré qui relient des sous-groupes (approche de GraphPart, Teufel et al., 2023). Les séquences retirées sont listées, jamais cachées ;</li>
+      <li><strong>tenir à l'écart des groupes biologiques entiers</strong> (gènes, espèces, loci), ce qui teste directement la généralisation visée.</li>
+    </ol>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>Un seuil choisi parce qu'il « donne une partition raisonnable » est arbitraire. Montrez la courbe taille de la composante géante en fonction de \(t\) sur vos données, et l'évolution des performances du modèle sur plusieurs seuils. Un modèle robuste se dégrade doucement ; un modèle qui mémorise s'effondre.</p></div>
+
+    <h2 id="protocole"><span class="num">5</span>Le protocole en couches</h2>
+    <p>Chaque couche répond à une question différente. On les construit dans cet ordre, et chaque couche est retirée du train avant la suivante.</p>
+    <div class="layers">
+      <div class="layer"><span class="lv">0</span><div><h4>Nettoyage</h4><p>Doublons exacts, séquences non productives, domaines tronqués étiquetés. Regroupement des clones (même V, même J, CDR3 très proche).</p></div><div class="q">Les données sont-elles saines ?</div></div>
+      <div class="layer"><span class="lv">1</span><div><h4>Hold-out temporel</h4><p>Séquences ajoutées à IMGT après une date \(D\) postérieure au corpus du modèle de base (UniRef de ESM C par exemple).</p></div><div class="q">Le modèle généralise-t-il à des données qu'aucun modèle n'a pu voir ?</div></div>
+      <div class="layer"><span class="lv">2</span><div><h4>Hold-out de locus ou de type de domaine</h4><p>Par exemple, entraîner sans aucun TR δ, ou sans domaine G-BETA.</p></div><div class="q">Le modèle transfère-t-il entre familles de récepteurs ?</div></div>
+      <div class="layer"><span class="lv">3</span><div><h4>Hold-out d'espèces</h4><p>Espèces entières, de préférence des clades : tenir à l'écart le lama mais garder le dromadaire teste peu.</p></div><div class="q">Le modèle numérote-t-il une espèce peu représentée ?</div></div>
+      <div class="layer"><span class="lv">4</span><div><h4>Hold-out de gènes</h4><p>Groupes de gènes fusionnés au-delà d'un seuil d'identité germinale (IGHV3-23 et IGHV3-23D sont identiques).</p></div><div class="q">Le modèle identifie-t-il le plus proche voisin d'un gène absent ?</div></div>
+      <div class="layer"><span class="lv">5</span><div><h4>Split par composantes</h4><p>Sur le reste, composantes à \(t\) (domaine entier et FR), réparties en train, validation et test, stratifiées par locus et espèce.</p></div><div class="q">Performance sur des séquences nouvelles de gènes connus.</div></div>
+      <div class="layer"><span class="lv">6</span><div><h4>Corpus DAPT et TAPT</h4><p>Retirer toute séquence à au moins \(t\) d'une séquence de validation ou de test, toutes couches confondues.</p></div><div class="q">Le pré-entraînement a-t-il vu le test ?</div></div>
+    </div>
+    <div class="callout note"><span class="label">À retenir</span><p>Un seul chiffre d'exactitude ne suffit pas. Le tableau de résultats aura une ligne par couche de test, et chaque ligne une signification biologique précise.</p></div>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>La tête « gène » ne peut pas prédire un gène absent du vocabulaire. Pour la couche 4, la bonne cible est soit le gène le plus proche présent à l'entraînement (évaluation en ensemble ouvert), soit une recherche par plus proche voisin dans un espace de plongement. À trancher avant de construire les étiquettes.</p></div>
+
+    <h2 id="mmseqs"><span class="num">6</span>MMseqs2 en pratique</h2>
+    <p>Version de référence : release 18 (tag <code>18-8cc5c</code>). Toujours passer les options explicitement, les valeurs par défaut diffèrent selon les sous-commandes.</p>
+    <pre data-lang="bash" data-file="all_vs_all.sh"><code># 1. All-vs-all search: every pair >= 0.5 identity with 80% bidirectional coverage.
+#    --max-seqs must be large: the default (300) truncates neighbour lists of
+#    dense IG/TR families and silently drops edges.
+mmseqs easy-search domains.fasta domains.fasta hits.tsv tmp \
+    --min-seq-id 0.5 -c 0.8 --cov-mode 0 --seq-id-mode 0 \
+    -s 7.5 --max-seqs 100000 \
+    --format-output query,target,fident,alnlen,qcov,tcov \
+    --threads 16
+
+# 2. (Optional) connected-component clustering directly in MMseqs2.
+mmseqs easy-cluster domains.fasta clu tmp \
+    --min-seq-id 0.9 -c 0.8 --cov-mode 0 --cluster-mode 1 --cluster-reassign</code></pre>
+    <ul>
+      <li><code>--cluster-mode 0</code> = set-cover (représentants), <code>1</code> = composantes connexes, <code>2</code> et <code>3</code> = glouton par longueur, façon CD-HIT ;</li>
+      <li><code>--cluster-reassign</code> corrige les membres mal affectés par le clustering en cascade ;</li>
+      <li><code>easy-linclust</code> est linéaire mais moins sensible : utile pour dédoublonner un très grand corpus DAPT, pas pour garantir l'absence de fuite ;</li>
+      <li>stocker la commande exacte, la version et la graine dans les métadonnées du split.</li>
+    </ul>
+    <pre data-lang="python" data-file="make_splits.py"><code>from protannotml.data.partition import (
+    audit_split, filter_pretraining_corpus, merge_near_identical_groups,
+    holdout_groups, mmseqs_all_vs_all, split_by_components,
+)
+
+edges = mmseqs_all_vs_all("domains.fasta", min_seq_id=0.5, coverage=0.8, cov_mode=0)
+
+# Layer 4: hold out gene groups, after merging near-identical germline genes.
+gene_of = merge_near_identical_groups(gene_of_raw, germline_gene_edges, threshold=0.98)
+kept, test_unseen_gene = holdout_groups(gene_of, held_out_gene_groups)
+
+# Layer 5: component split on the rest, stratified by locus.
+res = split_by_components(kept, edges, threshold=0.9,
+                          ratios={"train": 0.8, "valid": 0.1, "test": 0.1},
+                          labels=locus_of, max_component_fraction=0.2, seed=13)
+print(len(res.removed), "bridging sequences removed")
+
+# Audit on the full edge list (independent of how the split was built).
+assignment = {**res.assignment, **{x: "test_gene" for x in test_unseen_gene}}
+for test_name in ("test", "test_gene"):
+    print(test_name, audit_split(assignment, edges, 0.9, splits=("train", test_name)))
+
+# Layer 6: clean the DAPT corpus against every evaluation split.
+protected = [x for x, s in assignment.items() if s != "train"]
+dapt_ids = filter_pretraining_corpus(corpus_ids, protected, corpus_vs_eval_edges, threshold=0.9)</code></pre>
+
+    <h2 id="audit"><span class="num">7</span>Auditer et rapporter</h2>
+    <p>L'audit se fait sur une recherche indépendante, idéalement plus sensible que celle qui a servi au découpage. Pour chaque séquence de test \(x\), on calcule son identité maximale au train :</p>
+    <div class="math-block">\[ m(x) = \max_{y \in \text{train}} \text{sim}(x, y), \qquad \text{palier}(x) \in \{\ge 95\,\%,\; 90\text{–}95,\; 80\text{–}90,\; 70\text{–}80,\; < 70\,\%\}. \]</div>
+    <p>On rapporte alors les performances <strong>par palier</strong> : c'est la courbe de généralisation. Si l'exactitude reste haute à moins de 70 % d'identité au train, l'argument est fort ; si elle n'existe qu'au-dessus de 95 %, le modèle mémorise.</p>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Sur 2 000 séquences de test, supposons 1 200 au palier 90–95 % avec 99,1 % d'exactitude par position et 150 au palier &lt; 70 % avec 92,4 %. Une moyenne globale masquerait l'écart. Avec un bootstrap par composante (module 6), l'intervalle à 95 % du palier &lt; 70 % sera large, car 150 séquences peuvent ne provenir que de quelques composantes.</p>
+    </div>
+
+    <h2 id="modele-base"><span class="num">8</span>La fuite par le modèle de base</h2>
+    <p>ESM-2 et ESM C ont été entraînés sur UniRef (et, pour ESM C, sur des données métagénomiques), qui contiennent des séquences d'IG et de TR. Vos séquences de test y sont peut-être. On ne peut pas réentraîner ces modèles, mais on peut :</p>
+    <ul>
+      <li>construire le hold-out temporel (couche 1) avec des séquences déposées après le gel des données du modèle de base ;</li>
+      <li>comparer à un modèle de même architecture entraîné sans pré-entraînement générique, sur le même DAPT ;</li>
+      <li>rechercher les séquences de test dans UniRef (version utilisée par le modèle) et rapporter les résultats avec et sans elles.</li>
+    </ul>
+
+    <h2 id="quiz"><span class="num">9</span>Auto-évaluation</h2>
+    <details class="check"><summary>Pourquoi des clusters CD-HIT répartis entre train et test peuvent-ils fuir ?</summary><p>Le clustering ne garantit que la proximité au représentant. Deux membres de clusters différents peuvent être à plus de \(t\) l'un de l'autre.</p></details>
+    <details class="check"><summary>Que risque-t-on avec <code>--max-seqs 300</code> sur 50 000 VH humains ?</summary><p>Chaque requête a des milliers de voisins au-dessus du seuil ; seuls 300 passent le préfiltre. Des arêtes manquent, des composantes sont artificiellement séparées, et l'audit sous-estime la fuite.</p></details>
+    <details class="check"><summary>Pourquoi fusionner IGHV3-23 et IGHV3-23D avant un hold-out de gènes ?</summary><p>Leurs séquences sont identiques. En tenir un seul à l'écart laisse l'autre dans le train : le gène « inédit » ne l'est pas.</p></details>
+    <details class="check"><summary>Le corpus DAPT ne contient pas d'étiquettes. Pourquoi le filtrer ?</summary><p>Le MLM apprend la distribution des séquences elles-mêmes ; avoir reconstruit une séquence de test lui donne un avantage indu en aval.</p></details>
+
+    <h2 id="sources"><span class="num">10</span>Sources</h2>
+    <ol class="sources">
+      <li>Steinegger M, Söding J (2017) MMseqs2 enables sensitive protein sequence searching for the analysis of massive data sets. <i>Nat Biotechnol</i> 35:1026–1028. Code et options : <a href="https://github.com/soedinglab/MMseqs2">github.com/soedinglab/MMseqs2</a> (<code>src/commons/Parameters.cpp</code>, release 18).</li>
+      <li>Steinegger M, Söding J (2018) Clustering huge protein sequence sets in linear time. <i>Nat Commun</i> 9:2542.</li>
+      <li>Teufel F, et al. (2023) GraphPart: homology partitioning for biological sequence analysis. <i>NAR Genom Bioinform</i>. <a href="https://github.com/graph-part/graph-part">github.com/graph-part/graph-part</a></li>
+      <li>Hermann L, et al. (2024) Beware of data leakage from protein LLM pretraining. <i>PMLR</i> 261. <a href="https://proceedings.mlr.press/v261/hermann24a.html">proceedings.mlr.press</a></li>
+      <li>Model card ESMC-6B (Biohub, données d'entraînement UniRef, MGnify, JGI). <a href="https://huggingface.co/biohub/ESMC-6B-hf">huggingface.co</a></li>
+    </ol>
+
+    <nav class="pager" aria-label="Navigation entre modules">
+      <a class="prev" href="m2.html"><small>Module précédent</small>Numérotation IMGT et exceptions</a>
+      <a class="next" href="m4.html"><small>Module suivant</small>MLM : DAPT puis TAPT</a>
+    </nav>
+  </main>
+</div>
+
+<script>
+(() => {
+  const svgG = document.getElementById("graph"), perco = document.getElementById("perco");
+  const thr = document.getElementById("thr"), thrOut = document.getElementById("thrOut");
+  const bRep = document.getElementById("modeRep"), bCC = document.getElementById("modeCC");
+  let mode = "rep", seed = 7, nodes = [], pairs = [];
+
+  function rng(s) { return () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; }
+  function generate() {
+    const r = rng(seed);
+    nodes = [];
+    const centres = [[90, 80], [210, 70], [360, 90], [110, 250], [250, 200], [390, 270], [250, 310]];
+    centres.forEach(([cx, cy], c) => {
+      const n = 4 + Math.floor(r() * 5);
+      for (let i = 0; i < n; i++) nodes.push({ x: cx + (r() - .5) * 80, y: cy + (r() - .5) * 70, fam: c });
+    });
+    while (nodes.length < 48) nodes.push({ x: 30 + r() * 420, y: 30 + r() * 300, fam: -1 });
+    nodes = nodes.slice(0, 48).map((n, i) => ({ ...n, id: i }));
+    pairs = [];
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const d = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y);
+      pairs.push([i, j, Math.max(0, 1 - d / 300)]); // identity proxy in [0, 1]
+    }
+  }
+  function components(t) {
+    const p = nodes.map((_, i) => i);
+    const f = (x) => { while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; };
+    pairs.forEach(([a, b, s]) => { if (s >= t) p[f(a)] = f(b); });
+    const g = new Map();
+    nodes.forEach((_, i) => { const k = f(i); if (!g.has(k)) g.set(k, []); g.get(k).push(i); });
+    return [...g.values()].sort((a, b) => b.length - a.length);
+  }
+  function setCover(t) {
+    const nb = nodes.map(() => new Set());
+    pairs.forEach(([a, b, s]) => { if (s >= t) { nb[a].add(b); nb[b].add(a); } });
+    const un = new Set(nodes.map((_, i) => i));
+    const out = [];
+    while (un.size) {
+      let best = -1, bc = -1;
+      un.forEach((i) => { const c = [...nb[i]].filter((j) => un.has(j)).length; if (c > bc) { bc = c; best = i; } });
+      const mem = [best, ...[...nb[best]].filter((j) => un.has(j))];
+      mem.forEach((m) => un.delete(m));
+      out.push(mem);
+    }
+    return out.sort((a, b) => b.length - a.length);
+  }
+  function assign(groups) {
+    // Shuffle whole groups (seeded), then fill the test split up to 30 %.
+    const r = rng(seed + 101);
+    const order = groups.map((g, i) => [r(), i]).sort((a, b) => a[0] - b[0]).map(([, i]) => groups[i]);
+    const split = new Array(nodes.length).fill("train");
+    let nTest = 0;
+    order.forEach((g) => {
+      if (nTest + g.length <= Math.round(0.3 * nodes.length) + 1) { g.forEach((i) => (split[i] = "test")); nTest += g.length; }
+    });
+    return split;
+  }
+  function drawPerco(t) {
+    perco.innerHTML = "";
+    const W = 300, H = 170, x0 = 34, y0 = 14, w = 252, h = 120;
+    const xs = (v) => x0 + (v - 0.6) / 0.38 * w, ys = (v) => y0 + h - v * h;
+    PA.svg("line", { x1: x0, x2: x0 + w, y1: y0 + h, y2: y0 + h, stroke: "var(--rule)" }, perco);
+    [0, 0.5, 1].forEach((v) => {
+      PA.svg("line", { x1: x0, x2: x0 + w, y1: ys(v), y2: ys(v), stroke: "var(--rule)", "stroke-dasharray": v ? "2 3" : "" }, perco);
+      PA.svg("text", { x: x0 - 6, y: ys(v) + 3, "text-anchor": "end", "font-size": 9, class: "svg-muted", text: Math.round(v * 100) + "%" }, perco);
+    });
+    [0.6, 0.7, 0.8, 0.9, 0.98].forEach((v) => PA.svg("text", { x: xs(v), y: y0 + h + 13, "text-anchor": "middle", "font-size": 9, class: "svg-muted", text: v.toFixed(2).replace(".", ",") }, perco));
+    PA.svg("text", { x: x0, y: H - 2, "font-size": 9, class: "svg-muted", text: "seuil t → part de la plus grande composante" }, perco);
+    const pts = [];
+    for (let v = 0.6; v <= 0.981; v += 0.01) pts.push([v, components(v)[0].length / nodes.length]);
+    const d = pts.map(([v, f], i) => `${i ? "L" : "M"} ${xs(v).toFixed(1)} ${ys(f).toFixed(1)}`).join(" ");
+    PA.svg("path", { d: d + ` L ${xs(0.98)} ${ys(0)} L ${xs(0.6)} ${ys(0)} Z`, fill: "var(--accent-soft)", stroke: "none" }, perco);
+    PA.svg("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2 }, perco);
+    const f = components(t)[0].length / nodes.length;
+    PA.svg("circle", { cx: xs(t), cy: ys(f), r: 4.5, fill: "var(--accent)", stroke: "var(--panel)", "stroke-width": 2 }, perco);
+  }
+  function draw() {
+    const t = +thr.value / 100;
+    thrOut.textContent = t.toFixed(2).replace(".", ",");
+    const groups = mode === "rep" ? setCover(t) : components(t);
+    const split = assign(groups);
+    svgG.innerHTML = "";
+    let viol = 0;
+    pairs.forEach(([a, b, s]) => {
+      if (s < t) return;
+      const leak = split[a] !== split[b];
+      if (leak) viol++;
+      PA.svg("line", { x1: nodes[a].x, y1: nodes[a].y, x2: nodes[b].x, y2: nodes[b].y, stroke: leak ? "var(--crit)" : "var(--rule)", "stroke-width": leak ? 2.6 : 1.2 }, svgG);
+    });
+    if (mode === "rep") {
+      groups.forEach((g) => { const r0 = nodes[g[0]]; PA.svg("circle", { cx: r0.x, cy: r0.y, r: 10, fill: "none", stroke: "var(--ink)", "stroke-width": 1.2 }, svgG); });
+    }
+    nodes.forEach((n, i) => PA.svg("circle", { cx: n.x, cy: n.y, r: 6.5, fill: split[i] === "train" ? "var(--accent)" : "var(--cdr2)", stroke: "var(--panel)", "stroke-width": 1.5 }, svgG));
+    const nTest = split.filter((s) => s === "test").length;
+    document.getElementById("stGroups").textContent = groups.length;
+    document.getElementById("stGiant").textContent = Math.round(groups[0].length / nodes.length * 100) + " %";
+    document.getElementById("stTest").textContent = Math.round(nTest / nodes.length * 100) + " %";
+    document.getElementById("stViol").textContent = viol;
+    document.getElementById("stViolBox").className = "stat " + (viol ? "bad" : "good");
+    drawPerco(t);
+  }
+  bRep.addEventListener("click", () => { mode = "rep"; bRep.setAttribute("aria-pressed", "true"); bCC.setAttribute("aria-pressed", "false"); draw(); });
+  bCC.addEventListener("click", () => { mode = "cc"; bCC.setAttribute("aria-pressed", "true"); bRep.setAttribute("aria-pressed", "false"); draw(); });
+  thr.addEventListener("input", draw);
+  document.getElementById("reseed").addEventListener("click", () => { seed = (seed * 31 + 11) % 100000; generate(); draw(); });
+  generate(); draw();
+})();
+</script>
+</body>
+</html>

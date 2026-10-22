@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Évaluation et statistiques</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.js"></script>
+<style>
+  .boot-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 10px; }
+  .boot-stats div { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; background: var(--paper); font-size: var(--s-0); }
+  .boot-stats b { display: block; font-family: var(--f-mono); font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .yes { color: var(--ok); font-weight: 700; }
+  .no { color: var(--muted); }
+  .part { color: var(--warn); font-weight: 700; }
+  .bnd { font-family: var(--f-mono); font-size: .8rem; display: grid; gap: 4px; }
+  .bnd .row { display: grid; grid-template-columns: 4.5em repeat(10, minmax(0, 1fr)); gap: 2px; align-items: center; }
+  .bnd .row span { text-align: center; padding: 3px 0; border-radius: 2px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Module 6 sur 6</span>
+    <nav aria-label="Modules">
+      <a href="index.html">Accueil</a>
+      <a href="m1.html">1</a><a href="m2.html">2</a><a href="m3.html">3</a><a href="m4.html">4</a><a href="m5.html">5</a><a href="m6.html" aria-current="page">6</a>
+    </nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="toc" aria-label="Sommaire"><h2>Sommaire</h2><ol></ol></aside>
+  <main class="article">
+    <p class="eyebrow">Module 6 · Preuve</p>
+    <h1>Évaluation, métriques et statistiques</h1>
+    <p class="lede">Un relecteur de NAR ou de Genome Biology demandera trois choses : la bonne métrique pour chaque tâche, une incertitude honnête sur chaque chiffre, et une comparaison équitable aux outils existants. Ce module fournit les trois.</p>
+    <p class="meta-row"><span><b>Durée</b> 75 min</span><span><b>Prérequis</b> modules 3 et 5</span><span><b>Code</b> <code>protannotml.eval</code></span></p>
+
+    <h2 id="verite"><span class="num">1</span>D'abord : quelle vérité terrain ?</h2>
+    <p>Si les étiquettes d'entraînement et de test viennent de DomainGapAlign, alors DomainGapAlign a 100 % sur le test par construction, et le modèle ne peut au mieux que l'égaler. Il faut distinguer deux questions :</p>
+    <ul>
+      <li><strong>reproduction</strong> : le modèle retrouve-t-il les annotations de DomainGapAlign ? Mesure utile, mais ce n'est pas une preuve de supériorité ;</li>
+      <li><strong>justesse</strong> : le modèle a-t-il raison là où les outils divergent ou échouent ? Il faut alors une vérité indépendante : structures curées d'IMGT/3Dstructure-DB, sous-ensemble expertisé à la main, ou cas synthétiques dont la réponse est connue (mutations introduites dans un germinal, CDR3 de longueur contrôlée).</li>
+    </ul>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>« Vous affirmez faire mieux que l'outil qui a produit vos étiquettes. Sur quelles séquences, et selon quelle référence ? » Prévoir un jeu « désaccords » : les séquences où au moins deux outils divergent, annotées indépendamment, et rapporter chaque outil sur ce jeu.</p></div>
+
+    <h2 id="numerotation"><span class="num">2</span>Numérotation</h2>
+    <p>Pour \(N\) séquences de longueurs \(L_n\), avec \(\hat y_{n,i}\) la position prédite et \(y_{n,i}\) la référence :</p>
+    <div class="math-block">\[ \text{Acc}_{\text{pos}} = \frac{\sum_n \sum_i \mathbb{1}[\hat y_{n,i} = y_{n,i}]}{\sum_n L_n}, \qquad \text{EM} = \frac{1}{N} \sum_n \mathbb{1}\big[\forall i : \hat y_{n,i} = y_{n,i}\big]. \]</div>
+    <p>L'exactitude par position (micro-moyenne) est dominée par les FR, faciles. L'exactitude de séquence exacte (EM) est la plus exigeante : une seule erreur suffit. Il faut aussi la ventilation <strong>par position</strong> (où sont les erreurs ?) et <strong>par région</strong>, en isolant les insertions 111.x/112.x.</p>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>1 000 VH de 120 résidus. Le modèle se trompe sur 300 résidus, tous dans des CDR3 longues, à raison de 2 erreurs par séquence fautive. \(\text{Acc}_{\text{pos}} = 1 - 300/120\,000 = 99{,}75\,\%\). Mais 150 séquences sont fausses : \(\text{EM} = 85{,}0\,\%\). Les deux chiffres décrivent le même modèle ; le second dit qu'un utilisateur sur sept recevra une numérotation erronée.</p>
+    </div>
+
+    <h2 id="bornes"><span class="num">3</span>Bornes de régions et de domaines</h2>
+    <p>Une borne est un couple (étiquette, côté, indice). Une borne prédite est correcte si une borne de référence de même étiquette et même côté se trouve à au plus \(\delta\) résidus, appariement un à un :</p>
+    <div class="math-block">\[ P_\delta = \frac{TP_\delta}{TP_\delta + FP_\delta}, \quad R_\delta = \frac{TP_\delta}{TP_\delta + FN_\delta}, \quad F1_\delta = \frac{2 P_\delta R_\delta}{P_\delta + R_\delta}. \]</div>
+    <p>Rapporter \(\delta = 0\) (exact) et \(\delta = 1\) ou 2 (tolérance). Pour les domaines entiers, on ajoute une F1 de segments exacts : un domaine compte s'il a le bon type et les deux bornes exactes.</p>
+    <figure class="panel">
+      <div class="bnd" id="bnd"></div>
+      <div class="controls" style="margin-top:10px">
+        <label for="tol">Tolérance \(\delta\) <input type="range" id="tol" min="0" max="2" value="0"><output id="tolOut">0</output></label>
+        <span class="kbd-hint" id="bndOut"></span>
+      </div>
+      <figcaption><b>Exemple du test unitaire.</b> La prédiction décale le début de la CDR1 d'un résidu. À \(\delta = 0\) : 4 bornes justes, 2 fausses, 2 manquées, F1 = 0,667. À \(\delta = 1\) : F1 = 1.</figcaption>
+    </figure>
+
+    <h2 id="assignation"><span class="num">4</span>Gène, allèle, espèce</h2>
+    <p>Avec \(S_n\) l'ensemble des réponses également correctes (allèles de même traduction, module 1) :</p>
+    <div class="math-block">\[ \text{Acc}_{\text{ens}} = \frac{1}{N}\sum_n \mathbb{1}[\hat a_n \in S_n], \qquad \text{Top-}k = \frac{1}{N}\sum_n \mathbb{1}\big[\{\hat a_n^{(1)}, \dots, \hat a_n^{(k)}\} \cap S_n \neq \varnothing\big]. \]</div>
+    <p>Pour le gène, rapporter aussi l'exactitude au niveau du sous-groupe : une confusion IGHV3-23 / IGHV3-30 n'a pas la même gravité qu'une confusion IGHV3 / IGKV1.</p>
+    <h3>Calibration et abstention</h3>
+    <p>Un outil d'annotation doit savoir dire « incertain ». L'erreur de calibration attendue mesure l'écart entre confiance et exactitude, sur des intervalles de confiance \(B_b\) :</p>
+    <div class="math-block">\[ \mathrm{ECE} = \sum_{b} \frac{|B_b|}{N} \,\big| \operatorname{acc}(B_b) - \operatorname{conf}(B_b) \big| . \]</div>
+    <p>La courbe couverture-exactitude (exactitude parmi les \(c\) % de prédictions les plus confiantes) montre ce que l'on gagne en s'abstenant. Pour l'allèle de séquences mutées, c'est souvent la figure la plus honnête.</p>
+
+    <h2 id="incertitude"><span class="num">5</span>Intervalles de confiance : le bootstrap par groupe</h2>
+    <p>Les séquences de test ne sont pas indépendantes : celles d'une même composante (module 3), d'un même gène ou d'une même espèce partagent leurs erreurs. Un bootstrap qui rééchantillonne les séquences une à une sous-estime la variance. On rééchantillonne donc des <strong>groupes entiers</strong> \(G_1, \dots, G_m\) :</p>
+    <div class="math-block">\[ \hat\theta^{*(b)} = \frac{\sum_{g \in \mathcal{G}^{*(b)}} \sum_{n \in G_g} v_n}{\sum_{g \in \mathcal{G}^{*(b)}} |G_g|}, \quad \mathcal{G}^{*(b)} \sim \text{tirage avec remise de } m \text{ groupes}, \quad \text{IC}_{95} = \big[q_{2{,}5\%}, q_{97{,}5\%}\big]. \]</div>
+    <figure class="panel">
+      <div class="controls">
+        <button class="btn" type="button" id="bootPlay">Lecture</button>
+        <button class="btn ghost" type="button" id="bootNew">Nouveau jeu de test</button>
+        <span class="kbd-hint" id="bootCount"></span>
+      </div>
+      <svg id="boot" viewBox="0 0 640 230" role="img" aria-label="Distributions bootstrap naïve et par groupe"></svg>
+      <div class="legend"><span><i style="background:var(--muted)"></i>bootstrap naïf (séquences)</span><span><i style="background:var(--accent)"></i>bootstrap par groupe (composantes)</span></div>
+      <div class="boot-stats" id="bootStats"></div>
+      <figcaption><b>Simulation.</b> 30 composantes de 5 à 40 séquences, exactitude propre à chaque composante tirée entre 60 % et 100 %. Les deux bootstraps visent la même moyenne, mais l'intervalle par groupe est nettement plus large, et c'est lui qui est juste.</figcaption>
+    </figure>
+
+    <h2 id="comparaisons"><span class="num">6</span>Comparer deux systèmes</h2>
+    <p>Deux systèmes A et B annotent les <strong>mêmes</strong> séquences : la comparaison doit être appariée.</p>
+    <h3>Test de McNemar exact</h3>
+    <p>Sur un critère binaire (séquence entièrement juste ou non), seules comptent les discordances : \(b\) séquences où A a raison et B tort, \(c\) l'inverse. Sous l'hypothèse nulle, \(b \sim \mathcal{B}(b + c, 1/2)\) :</p>
+    <div class="math-block">\[ p = \min\!\Big(1,\; 2 \sum_{j=0}^{\min(b,c)} \binom{b+c}{j} 2^{-(b+c)}\Big). \]</div>
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p>Sur 2 000 séquences, A et B sont d'accord sur 1 954. A seul a raison sur \(b = 34\), B seul sur \(c = 12\). Avec \(n = 46\), \(p = 2\,P(X \le 12)\) pour \(X \sim \mathcal{B}(46, 1/2)\), soit environ \(0{,}002\). La différence d'EM vaut \((34 - 12)/2\,000 = 1{,}1\) point. Significative, mais à mettre en regard de l'intervalle par groupe : McNemar suppose des paires indépendantes.</p>
+    </div>
+    <h3>Bootstrap apparié par groupe</h3>
+    <p>Pour respecter la structure en groupes, on rééchantillonne les groupes et on calcule la différence \(\bar v_A - \bar v_B\) sur le même tirage. L'intervalle de cette différence est la mesure principale ; s'il exclut 0, l'écart est robuste.</p>
+    <h3>Comparaisons multiples</h3>
+    <p>Avec 6 outils, 5 couches de test et 4 métriques, on fait des dizaines de tests. La correction de Holm contrôle le risque global : trier les \(p\), multiplier le \(r\)-ième plus petit par \(m - r + 1\), imposer la monotonie. Et pour les variantes de modèle, rapporter la moyenne et l'écart sur au moins 3 graines : une différence plus petite que la variabilité entre graines n'est pas un résultat.</p>
+
+    <h2 id="references"><span class="num">7</span>Les outils de référence</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Outil</th><th>Entrée</th><th>Numérotation IMGT</th><th>Domaines C, G</th><th>Gène / allèle</th><th>TR</th></tr></thead>
+        <tbody>
+          <tr><td>IMGT/DomainGapAlign</td><td>protéine</td><td class="yes">oui</td><td class="yes">oui</td><td class="yes">oui</td><td class="yes">oui</td></tr>
+          <tr><td>IMGT/V-QUEST</td><td>nucléotides</td><td class="yes">oui</td><td class="no">non</td><td class="yes">oui</td><td class="yes">oui</td></tr>
+          <tr><td>IgBLAST</td><td>nucléotides ; protéine (V seulement)</td><td class="part">régions IMGT</td><td class="no">non</td><td class="part">gène V en protéine</td><td class="yes">oui</td></tr>
+          <tr><td>ANARCI</td><td>protéine</td><td class="yes">oui</td><td class="no">non</td><td class="part">germinal le plus proche</td><td class="yes">oui</td></tr>
+          <tr><td>AbNumber</td><td>protéine</td><td class="yes">oui (via ANARCI)</td><td class="no">non</td><td class="part">germinaux humains</td><td class="no">non (anticorps)</td></tr>
+          <tr><td>ANARCII</td><td>protéine</td><td class="yes">oui</td><td class="no">non</td><td class="no">non</td><td class="yes">oui</td></tr>
+          <tr><td>PLM non adapté + têtes</td><td>protéine</td><td class="yes">appris</td><td class="yes">appris</td><td class="yes">appris</td><td class="yes">appris</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Pour une comparaison équitable :</p>
+    <ul>
+      <li>même entrée pour tous (V-QUEST et IgBLAST nucléotidique ne s'appliquent qu'aux séquences dont on a l'ADN) ;</li>
+      <li>bases de référence alignées sur la même version d'IMGT, sinon un outil est pénalisé pour un allèle qu'il ne connaît pas ;</li>
+      <li>versions et paramètres archivés, sorties brutes conservées ;</li>
+      <li>chaque outil évalué seulement sur ce qu'il prétend faire, avec une colonne « non applicable » plutôt qu'un zéro.</li>
+    </ul>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>Le tableau résume les capacités documentées au 20 octobre 2026 ; versions, options et couverture (TR γδ, espèces) varient. Vérifier chaque case sur la version utilisée, et demander à IMGT les conditions d'interrogation en masse de DomainGapAlign avant de lancer des milliers de requêtes.</p></div>
+
+    <h2 id="tableau"><span class="num">8</span>Le tableau de résultats attendu</h2>
+    <p>Une ligne par couche de test (module 3), une colonne par métrique, chaque cellule avec son intervalle par groupe. Gabarit, valeurs à remplir :</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Couche de test</th><th class="num">n séq. (groupes)</th><th class="num">Acc pos.</th><th class="num">EM</th><th class="num">F1 bornes CDR (δ=0)</th><th class="num">Gène (ens.)</th><th class="num">Allèle (ens.)</th></tr></thead>
+        <tbody>
+          <tr><td>Composantes, gènes connus</td><td class="num">…</td><td class="num">… [… ; …]</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td></tr>
+          <tr><td>Gènes tenus à l'écart</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">plus proche</td><td class="num">n.a.</td></tr>
+          <tr><td>Espèces tenues à l'écart</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td></tr>
+          <tr><td>Locus tenu à l'écart</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">n.a.</td><td class="num">n.a.</td></tr>
+          <tr><td>Temporel</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td></tr>
+          <tr><td>Désaccords entre outils</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td><td class="num">…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="reproductibilite"><span class="num">9</span>Reproductibilité</h2>
+    <ul>
+      <li><strong>données</strong> : version et date d'extraction IMGT, empreintes (SHA-256) de chaque fichier, licence de chaque source ;</li>
+      <li><strong>partitions</strong> : commande MMseqs2 complète, version, seuils, graine, liste des séquences retirées, fichier d'affectation publié ;</li>
+      <li><strong>modèles</strong> : identifiant et révision des poids de base, configuration, graines, journal d'entraînement ;</li>
+      <li><strong>évaluation</strong> : sorties brutes de chaque outil, scripts de métriques (ce paquet), nombre de rééchantillonnages bootstrap ;</li>
+      <li><strong>publication</strong> : code et poids sous licence compatible avec celle des données IMGT (point encore à clarifier, voir l'accueil du parcours), fiche de modèle décrivant les limites.</li>
+    </ul>
+
+    <h2 id="code"><span class="num">10</span>Le code</h2>
+    <pre data-lang="python" data-file="évaluer un système (testé)"><code>from protannotml.eval.metrics import boundary_f1, position_accuracy, sequence_exact_match, set_accuracy
+from protannotml.eval.stats import cluster_bootstrap_ci, holm_bonferroni, mcnemar_exact, paired_cluster_bootstrap_diff
+
+em_model = sequence_exact_match(pred_model, reference)          # per-sequence booleans
+em_anarci = sequence_exact_match(pred_anarci, reference)
+groups = [component_of[seq_id] for seq_id in test_ids]           # homology components (module 3)
+
+ci = cluster_bootstrap_ci(em_model, groups, n_boot=10_000, seed=0)
+diff, p_boot = paired_cluster_bootstrap_diff(em_model, em_anarci, groups, n_boot=10_000)
+b, c, p_mcnemar = mcnemar_exact(em_model, em_anarci)
+print(f"EM {ci.estimate:.3f} [{ci.low:.3f}, {ci.high:.3f}]; diff vs ANARCI {diff.estimate:+.3f} "
+      f"[{diff.low:+.3f}, {diff.high:+.3f}], p_boot={p_boot:.3g}, McNemar b={b} c={c} p={p_mcnemar:.3g}")
+
+adjusted = holm_bonferroni([p_boot_tool for p_boot_tool in all_pvalues])</code></pre>
+
+    <h2 id="quiz"><span class="num">11</span>Auto-évaluation</h2>
+    <details class="check"><summary>Pourquoi l'EM est-elle bien plus basse que l'exactitude par position ?</summary><p>Une seule erreur rend toute la séquence fausse ; les erreurs se concentrent sur quelques séquences difficiles.</p></details>
+    <details class="check"><summary>Pourquoi le bootstrap naïf donne-t-il un intervalle trop étroit ?</summary><p>Il traite comme indépendantes des séquences corrélées (même composante, même gène). La variance réelle vient surtout des différences entre groupes.</p></details>
+    <details class="check"><summary>Peut-on comparer V-QUEST et le modèle sur un jeu de structures PDB ?</summary><p>Pas directement : V-QUEST demande des nucléotides, absents pour la plupart des structures. Le noter comme non applicable.</p></details>
+    <details class="check"><summary>Que mesure-t-on si les étiquettes viennent de DomainGapAlign ?</summary><p>La reproduction de DomainGapAlign. Pour revendiquer une meilleure justesse, il faut une vérité indépendante sur les cas de désaccord.</p></details>
+
+    <h2 id="sources"><span class="num">12</span>Sources</h2>
+    <ol class="sources">
+      <li>Efron B, Tibshirani RJ (1993) <i>An Introduction to the Bootstrap</i>. Chapman &amp; Hall.</li>
+      <li>McNemar Q (1947) Note on the sampling error of the difference between correlated proportions or percentages. <i>Psychometrika</i> 12:153–157.</li>
+      <li>Holm S (1979) A simple sequentially rejective multiple test procedure. <i>Scand J Stat</i> 6:65–70.</li>
+      <li>Dietterich TG (1998) Approximate statistical tests for comparing supervised classification learning algorithms. <i>Neural Comput</i> 10:1895–1923.</li>
+      <li>Guo C, et al. (2017) On calibration of modern neural networks. <i>ICML</i>.</li>
+      <li>Brochet X, Lefranc M-P, Giudicelli V (2008) IMGT/V-QUEST. <i>Nucleic Acids Res</i> 36:W503–W508.</li>
+      <li>Ye J, et al. (2013) IgBLAST: an immunoglobulin variable domain sequence analysis tool. <i>Nucleic Acids Res</i> 41:W34–W40.</li>
+      <li>Dunbar J, Deane CM (2016) ANARCI. <i>Bioinformatics</i> 32:298–300.</li>
+      <li>AbNumber : <a href="https://github.com/prihoda/AbNumber">github.com/prihoda/AbNumber</a></li>
+      <li>Greenshields-Watson A, et al. (2025) ANARCII. <a href="https://biorxiv.org/content/10.1101/2025.04.16.648720v1">bioRxiv</a></li>
+      <li>Ehrenmann F, Kaas Q, Lefranc M-P (2010) IMGT/3Dstructure-DB and IMGT/DomainGapAlign. <i>Nucleic Acids Res</i> 38:D301–D307.</li>
+    </ol>
+
+    <nav class="pager" aria-label="Navigation entre modules">
+      <a class="prev" href="m5.html"><small>Module précédent</small>Multi-task learning</a>
+      <a class="next" href="index.html"><small>Fin du parcours</small>Retour à l'accueil</a>
+    </nav>
+  </main>
+</div>
+
+<script>
+/* ---------- Boundary demo ---------- */
+(() => {
+  const T = ["FR1", "FR1", "FR1", "FR1", "CDR1", "CDR1", "CDR1", "FR2", "FR2", "FR2"];
+  const P = ["FR1", "FR1", "FR1", "FR1", "FR1", "CDR1", "CDR1", "FR2", "FR2", "FR2"];
+  const box = document.getElementById("bnd"), tol = document.getElementById("tol"), out = document.getElementById("bndOut"), to = document.getElementById("tolOut");
+  const color = (r) => r === "CDR1" ? "var(--cdr1)" : "var(--fr)";
+  [["référence", T], ["prédiction", P]].forEach(([name, arr]) => {
+    const row = PA.html("div", { class: "row" }, box);
+    PA.html("span", { text: name, style: "text-align:left;color:var(--muted)" }, row);
+    arr.forEach((r) => PA.html("span", { text: r === "CDR1" ? "C1" : r.replace("FR", "F"), style: `background:${color(r)};color:${r === "CDR1" ? "var(--paper)" : "var(--ink)"}` }, row));
+  });
+  const spans = (a) => { const s = []; let i = 0; while (i < a.length) { let j = i; while (j < a.length && a[j] === a[i]) j++; s.push([a[i], i, j]); i = j; } return s; };
+  const bnds = (a) => spans(a).flatMap(([l, s, e]) => [[l, "start", s], [l, "end", e]]);
+  function render() {
+    const d = +tol.value; to.textContent = d;
+    const tb = bnds(T), pb = bnds(P), used = new Set();
+    let tp = 0, fp = 0;
+    pb.forEach((b) => {
+      const c = tb.map((t, k) => [t, k]).filter(([t, k]) => !used.has(k) && t[0] === b[0] && t[1] === b[1] && Math.abs(t[2] - b[2]) <= d);
+      if (c.length) { c.sort((x, y) => Math.abs(x[0][2] - b[2]) - Math.abs(y[0][2] - b[2])); used.add(c[0][1]); tp++; } else fp++;
+    });
+    const fn = tb.length - used.size, p = tp / (tp + fp), r = tp / (tp + fn), f = 2 * p * r / (p + r);
+    out.textContent = `TP ${tp} · FP ${fp} · FN ${fn} · F1 ${f.toFixed(3).replace(".", ",")}`;
+  }
+  tol.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- Bootstrap animation ---------- */
+(() => {
+  const root = document.getElementById("boot"), stats = document.getElementById("bootStats"), count = document.getElementById("bootCount"), btn = document.getElementById("bootPlay");
+  let seed = 3, values = [], groups = [], idxGroups = [], naive = [], clu = [], timer = null;
+  const B = 2000;
+  const rng = (s) => () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
+  function makeData() {
+    const r = rng(seed);
+    values = []; groups = []; idxGroups = [];
+    for (let g = 0; g < 30; g++) {
+      const p = 0.6 + 0.4 * r(), n = 5 + Math.floor(r() * 36);
+      const idx = [];
+      for (let i = 0; i < n; i++) { idx.push(values.length); values.push(r() < p ? 1 : 0); groups.push(g); }
+      idxGroups.push(idx);
+    }
+    naive = []; clu = [];
+  }
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const r2 = rng(99);
+  function drawOne() {
+    let s = 0;
+    for (let i = 0; i < values.length; i++) s += values[Math.floor(r2() * values.length)];
+    naive.push(s / values.length);
+    let tot = 0, n = 0;
+    for (let k = 0; k < idxGroups.length; k++) { const g = idxGroups[Math.floor(r2() * idxGroups.length)]; g.forEach((i) => { tot += values[i]; n++; }); }
+    clu.push(tot / n);
+  }
+  const q = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
+  function draw() {
+    root.innerHTML = "";
+    const est = mean(values);
+    const lo = est - 0.12, hi = est + 0.12, x0 = 30, w = 590, y0 = 14, h = 170, nb = 48;
+    const X = (v) => x0 + (v - lo) / (hi - lo) * w;
+    const bins = (arr) => { const c = new Array(nb).fill(0); arr.forEach((v) => { const k = Math.floor((v - lo) / (hi - lo) * nb); if (k >= 0 && k < nb) c[k]++; }); return c; };
+    const cn = bins(naive), cc = bins(clu);
+    const mx = Math.max(1, ...cn, ...cc);
+    const bw = w / nb;
+    PA.svg("line", { x1: x0, x2: x0 + w, y1: y0 + h, y2: y0 + h, stroke: "var(--rule)" }, root);
+    cn.forEach((c, k) => PA.svg("rect", { x: x0 + k * bw + 1, y: y0 + h - c / mx * h, width: bw - 2, height: c / mx * h, fill: "var(--muted)", opacity: 0.45 }, root));
+    cc.forEach((c, k) => PA.svg("rect", { x: x0 + k * bw + bw * 0.25, y: y0 + h - c / mx * h, width: bw * 0.5, height: c / mx * h, fill: "var(--accent)", opacity: 0.85 }, root));
+    PA.svg("line", { x1: X(est), x2: X(est), y1: y0, y2: y0 + h, stroke: "var(--ink)", "stroke-dasharray": "3 3" }, root);
+    for (let t = -0.1; t <= 0.1001; t += 0.05) PA.svg("text", { x: X(est + t), y: y0 + h + 16, "text-anchor": "middle", "font-size": 10, class: "svg-muted", text: ((est + t) * 100).toFixed(0) + " %" }, root);
+    PA.svg("text", { x: x0 + w, y: y0 + h + 32, "text-anchor": "end", "font-size": 10, class: "svg-muted", text: "exactitude rééchantillonnée" }, root);
+    if (naive.length > 40) {
+      [[naive, "var(--muted)", 0], [clu, "var(--accent)", 8]].forEach(([a, col, dy]) => {
+        const l = q(a, 0.025), u = q(a, 0.975);
+        PA.svg("line", { x1: X(l), x2: X(u), y1: y0 + 6 + dy, y2: y0 + 6 + dy, stroke: col, "stroke-width": 3 }, root);
+      });
+    }
+    count.textContent = `${naive.length} / ${B} rééchantillonnages`;
+    const fmt = (v) => (v * 100).toFixed(1).replace(".", ",") + " %";
+    const ci = (a) => a.length > 40 ? `[${fmt(q(a, 0.025))} ; ${fmt(q(a, 0.975))}]` : "…";
+    const width = (a) => a.length > 40 ? ((q(a, 0.975) - q(a, 0.025)) * 100).toFixed(1).replace(".", ",") + " pts" : "…";
+    stats.innerHTML = `<div>Estimation<b>${fmt(est)}</b></div><div>IC 95 % naïf<b>${ci(naive)}</b></div><div>IC 95 % par groupe<b>${ci(clu)}</b></div><div>Largeurs naïf / groupe<b>${width(naive)} / ${width(clu)}</b></div>`;
+  }
+  function play() {
+    if (timer) { clearInterval(timer); timer = null; btn.textContent = "Lecture"; return; }
+    if (naive.length >= B) { naive = []; clu = []; }
+    btn.textContent = "Pause";
+    timer = setInterval(() => {
+      for (let k = 0; k < 40 && naive.length < B; k++) drawOne();
+      draw();
+      if (naive.length >= B) { clearInterval(timer); timer = null; btn.textContent = "Lecture"; }
+    }, PA.reducedMotion() ? 200 : 50);
+  }
+  btn.addEventListener("click", play);
+  document.getElementById("bootNew").addEventListener("click", () => { if (timer) { clearInterval(timer); timer = null; btn.textContent = "Lecture"; } seed = (seed * 17 + 5) % 100000; makeData(); for (let k = 0; k < B; k++) drawOne(); draw(); });
+  makeData();
+  for (let k = 0; k < B; k++) drawOne(); // complete at rest
+  draw();
+})();
+</script>
+</body>
+</html>

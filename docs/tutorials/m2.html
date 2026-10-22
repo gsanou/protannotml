@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Numérotation IMGT et exceptions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Zilla+Slab:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="common.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.js"></script>
+<style>
+  .slots { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; padding: 6px 0 2px; }
+  .slot { width: 44px; display: grid; justify-items: center; gap: 3px; font-family: var(--f-mono); font-size: .72rem; color: var(--muted); transition: transform .35s, opacity .35s; }
+  .slot .bead { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .8rem; color: var(--paper); background: var(--slot-color, var(--cdr3)); transition: background .3s, border-color .3s; }
+  .slot.gap .bead { background: transparent; border: 1.5px dashed var(--muted); color: var(--muted); }
+  .slot.ins .bead { background: var(--ink); color: var(--paper); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .slot.new { animation: pop .45s ease-out; }
+  @keyframes pop { from { transform: translateY(-10px) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+  .order-line { font-family: var(--f-mono); font-size: .82rem; color: var(--ink-2); overflow-wrap: anywhere; margin-top: 10px; }
+  .editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .editor label { display: grid; gap: 4px; font-size: var(--s-0); color: var(--ink-2); }
+  .editor input { font-family: var(--f-mono); }
+  .status-line { font-size: var(--s-0); margin-top: 8px; color: var(--ink-2); }
+  .status-line .badge { display: inline-block; padding: 1px 7px; border-radius: 3px; font-weight: 700; font-size: .72rem; margin-right: 6px; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .sorter { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; min-height: 34px; }
+  .sorter span { font-family: var(--f-mono); font-size: .82rem; padding: 4px 8px; border-radius: 4px; background: var(--paper-2); border: 1px solid var(--rule); transition: transform .5s; }
+  .sorter span.prefix { border-color: var(--cdr3); color: var(--cdr3); font-weight: 700; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="index.html"><span class="pearls" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>ProtAnnotML</a>
+    <span class="crumb">Module 2 sur 6</span>
+    <nav aria-label="Modules">
+      <a href="index.html">Accueil</a>
+      <a href="m1.html">1</a><a href="m2.html" aria-current="page">2</a><a href="m3.html">3</a><a href="m4.html">4</a><a href="m5.html">5</a><a href="m6.html">6</a>
+    </nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="toc" aria-label="Sommaire"><h2>Sommaire</h2><ol></ol></aside>
+  <main class="article">
+    <p class="eyebrow">Module 2 · Le référentiel</p>
+    <h1>Numérotation IMGT et exceptions</h1>
+    <p class="lede">La numérotation IMGT est la cible principale du modèle. Elle obéit à des règles déterministes que l'on peut coder exactement, et à des exceptions qu'il faut connaître pour ne pas les apprendre de travers.</p>
+    <p class="meta-row"><span><b>Durée</b> 90 min</span><span><b>Prérequis</b> module 1</span><span><b>Code</b> <code>protannotml.imgt</code></span></p>
+
+    <h2 id="pourquoi"><span class="num">1</span>Pourquoi une numérotation unique</h2>
+    <p>Kabat (variabilité de séquence), Chothia (boucles structurales), Martin et AHo numérotent aussi les domaines V. La numérotation IMGT, publiée en 2003, se distingue par trois propriétés utiles au projet :</p>
+    <ul>
+      <li><strong>même grille pour IG et TR, toutes chaînes et toutes espèces</strong> : la position 41 est le tryptophane conservé d'un VH humain comme d'un V-BETA de souris ;</li>
+      <li><strong>bornes des CDR fixes</strong> : CDR1-IMGT = 27 à 38, CDR2-IMGT = 56 à 65, CDR3-IMGT = 105 à 117, quelle que soit la longueur réelle ;</li>
+      <li><strong>gaps et insertions réglés par la structure</strong> : une boucle courte perd des positions au sommet, une boucle longue en gagne au sommet.</li>
+    </ul>
+    <p>Pour un modèle, cela signifie qu'une même tête de sortie peut servir à tous les domaines V, et que l'essentiel des positions des CDR se <strong>déduit</strong> de leur longueur.</p>
+
+    <h2 id="grille-v"><span class="num">2</span>La grille du domaine V</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Région</th><th>Positions</th><th>Longueur max.</th><th>Ancres et résidus conservés</th></tr></thead>
+        <tbody>
+          <tr><td>FR1-IMGT</td><td>1–26</td><td class="num">26</td><td>23 : 1st-CYS</td></tr>
+          <tr><td style="color:var(--cdr1);font-weight:700">CDR1-IMGT</td><td>27–38</td><td class="num">12</td><td>bornée par 26 et 39</td></tr>
+          <tr><td>FR2-IMGT</td><td>39–55</td><td class="num">17</td><td>41 : CONSERVED-TRP</td></tr>
+          <tr><td style="color:var(--cdr2);font-weight:700">CDR2-IMGT</td><td>56–65</td><td class="num">10</td><td>bornée par 55 et 66</td></tr>
+          <tr><td>FR3-IMGT</td><td>66–104</td><td class="num">39</td><td>89 : hydrophobe ; 104 : 2nd-CYS</td></tr>
+          <tr><td style="color:var(--cdr3);font-weight:700">CDR3-IMGT</td><td>105–117</td><td class="num">13 + insertions</td><td>bornée par 104 et 118</td></tr>
+          <tr><td>FR4-IMGT</td><td>118–128</td><td class="num">11</td><td>118 : J-TRP ou J-PHE ; 119 : Gly</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Les brins β suivent la même grille : A 1–15, B 16–26, C 39–46, C′ 47–55, C″ 66–74, D 75–84, E 85–96, F 97–104, G 118–128. Les CDR sont les boucles BC, C′C″ et FG. Pour un gène germinal (non réarrangé), la CDR3-IMGT s'arrête à 116 puisqu'il n'y a pas encore de J.</p>
+
+    <h2 id="regle-gaps"><span class="num">3</span>La règle des gaps et des insertions</h2>
+    <p>Pour une boucle de bornes \(s\) et \(e\), de longueur maximale \(M = e - s + 1\), et une séquence de \(L\) résidus dans cette boucle :</p>
+    <div class="math-block">\[ L' = \min(L, M), \qquad n_{\leftarrow} = \left\lceil \tfrac{L'}{2} \right\rceil, \qquad n_{\rightarrow} = \left\lfloor \tfrac{L'}{2} \right\rfloor \]</div>
+    <div class="math-block">\[ \text{occupées} = \{s, \dots, s + n_{\leftarrow} - 1\} \;\cup\; \{e - n_{\rightarrow} + 1, \dots, e\}, \qquad \text{gaps} = \{s + n_{\leftarrow}, \dots, e - n_{\rightarrow}\}. \]</div>
+    <p>On remplit donc alternativement depuis les deux ancres, à gauche d'abord, et les gaps s'ouvrent au sommet. Pour la CDR3-IMGT, cela redonne l'ordre documenté par IMGT : 111, 112, 110, 113, 109, 114…</p>
+    <p>Si \(L > M\), les \(L - M\) résidus en trop deviennent des insertions aux deux positions centrales \(c_\leftarrow = s + \lceil M/2 \rceil - 1\) et \(c_\rightarrow = c_\leftarrow + 1\), en commençant à droite :</p>
+    <div class="math-block">\[ \text{insertion } k \;\mapsto\; \begin{cases} c_\rightarrow.\tfrac{k+1}{2} & k \text{ impair} \\[4pt] c_\leftarrow.\tfrac{k}{2} & k \text{ pair} \end{cases} \qquad \text{CDR3-IMGT : } c_\leftarrow = 111,\; c_\rightarrow = 112. \]</div>
+
+    <figure class="panel">
+      <div class="controls">
+        <label for="loopSel">Boucle
+          <select id="loopSel">
+            <option value="CDR1">CDR1-IMGT (27–38)</option>
+            <option value="CDR2">CDR2-IMGT (56–65)</option>
+            <option value="CDR3" selected>CDR3-IMGT (105–117)</option>
+          </select>
+        </label>
+        <label for="loopLen">Longueur <input type="range" id="loopLen" min="0" max="24" value="16"><output id="loopLenOut">16</output></label>
+      </div>
+      <div class="slots" id="slots" aria-live="polite"></div>
+      <div class="order-line" id="orderLine"></div>
+      <div class="status-line" id="loopStatus"></div>
+      <figcaption><b>Atelier de numérotation d'une boucle.</b> Pastilles pleines : positions occupées ; pointillés : gaps ; pastilles sombres : insertions. Faites varier la longueur et observez où s'ouvrent les gaps et où apparaissent 112.1, 111.1, 112.2…</figcaption>
+    </figure>
+
+    <div class="callout example"><span class="label">Exemple chiffré</span>
+      <p><b>CDR3-IMGT de 16 résidus.</b> \(M = 13\), donc \(L - M = 3\) insertions : \(k=1 \to 112.1\), \(k=2 \to 111.1\), \(k=3 \to 112.2\). Ordre le long de la séquence : 105 … 111, 111.1, 112.2, 112.1, 112 … 117.</p>
+      <p><b>CDR1-IMGT de 9 résidus.</b> \(n_\leftarrow = 5\), \(n_\rightarrow = 4\) : occupées 27–31 et 35–38 ; gaps 32, 33, 34.</p>
+    </div>
+
+    <div class="callout unverified"><span class="label">À vérifier</span>
+      <p>Les pages IMGT consultées le 20 octobre 2026 ne sont pas toutes cohérentes. La charte « IMGT superfamily V » décrit des gaps au sommet des CDR1 et CDR2 (ordres 33, 32, 34… et 61, 60, 62…), ce que le code reproduit. La page de définition des FR/CDR-IMGT donne un exemple où une CDR1 de 5 résidus occupe 27 à 31, ce qui contredit la règle du sommet. Par ailleurs, IMGT ne documente pas d'insertions pour CDR1 > 12 ni CDR2 > 10 : le code suit alors la convention symétrique d'ANARCI et le signale. Avant de figer les étiquettes, valider la règle sur quelques centaines de sorties de DomainGapAlign.</p>
+    </div>
+
+    <h2 id="fr-gaps"><span class="num">4</span>Les gaps germinaux des FR</h2>
+    <p>Les FR aussi ont des positions vides, mais elles ne dépendent pas de la longueur : elles sont propres au <strong>gène germinal</strong>. Par exemple, la plupart des gènes IGHV humains n'occupent pas la position 10, et beaucoup n'occupent pas la position 73. IMGT publie les V-REGION germinales « IMGT-gapped », où un point marque chaque gap : c'est la source à utiliser pour construire les gabarits de FR, jamais une liste codée en dur.</p>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span>
+      <p>Une hypermutation somatique peut insérer ou supprimer un codon dans une FR. La grille IMGT n'a pas de position pour une insertion de FR hors des sites prévus. Le vocabulaire de sortie doit donc contenir une classe « non numérotable » (<code>UNNUMBERED</code>), et l'évaluation doit compter à part ces séquences rares, sinon un modèle qui les ignore paraîtra parfait.</p>
+    </div>
+
+    <h2 id="essai"><span class="num">5</span>Atelier : numéroter un VH complet</h2>
+    <p>Les FR sont celles du trastuzumab (gabarit germinal avec gaps en 10 et 73). Modifiez les CDR : la numérotation, la vérification des ancres et le collier se recalculent.</p>
+    <figure class="panel">
+      <div class="editor">
+        <label for="cdr1In">CDR1-IMGT <input type="text" id="cdr1In" value="GFNIKDTY" spellcheck="false" autocomplete="off"></label>
+        <label for="cdr2In">CDR2-IMGT <input type="text" id="cdr2In" value="IYPTNGYT" spellcheck="false" autocomplete="off"></label>
+        <label for="cdr3In">CDR3-IMGT <input type="text" id="cdr3In" value="SRWGGDGFYAMDY" spellcheck="false" autocomplete="off"></label>
+      </div>
+      <div class="status-line" id="vhStatus"></div>
+      <div class="scroll-x" style="margin-top:10px"><svg id="collier" viewBox="0 0 760 510" role="img" aria-label="Collier de perles simplifié du domaine VH"></svg></div>
+      <div class="legend"><span><i style="background:var(--fr)"></i>FR</span><span><i style="background:var(--cdr1)"></i>CDR1</span><span><i style="background:var(--cdr2)"></i>CDR2</span><span><i style="background:var(--cdr3)"></i>CDR3</span><span><i style="border:1.5px dashed var(--muted)"></i>gap</span><span><i style="background:var(--paper);border:2px solid var(--ink)"></i>ancre</span></div>
+      <figcaption><b>Collier simplifié.</b> Chaque colonne est un brin β, parcouru alternativement vers le haut et vers le bas ; les trois CDR forment les boucles du sommet. Représentation inspirée des Colliers de Perles IMGT, sans leur géométrie exacte (deux feuillets, liaisons hydrogène). Les insertions de CDR3 apparaissent en sombre.</figcaption>
+    </figure>
+
+    <h2 id="ordre"><span class="num">6</span>Ordre numérique et ordre de séquence</h2>
+    <p>Trier les étiquettes « 112.1 » et « 112.2 » par valeur numérique donne un ordre faux. Dans la séquence, les insertions du côté droit d'une boucle sont rangées par indice décroissant <strong>avant</strong> leur base. On définit une clé de tri \(\kappa\) :</p>
+    <div class="math-block">\[ \kappa(n.k) = \begin{cases} (n,\, 0) & k = 0 \\ (n - 1,\; K - k) & k > 0 \text{ et } n \in \mathcal{P} \\ (n,\, k) & \text{sinon} \end{cases} \qquad K \gg \max k \]</div>
+    <p>avec \(\mathcal{P}\) l'ensemble des bases « préfixes » : 112 (domaines V et C), 85 (tour DE du domaine C) et 1 (extension N-terminale des domaines C et G).</p>
+    <figure class="panel">
+      <div class="controls"><button class="btn" type="button" id="sortNum">Tri numérique</button><button class="btn ghost" type="button" id="sortSeq">Tri par séquence</button></div>
+      <div class="sorter" id="sorter"></div>
+      <figcaption><b>Pourquoi c'est crucial.</b> Si le vocabulaire de la tête de numérotation est rangé par \(\kappa\), une numérotation valide est exactement une suite d'indices <i>strictement croissante</i>. Le module 5 exploite cette propriété pour un décodage monotone garanti.</figcaption>
+    </figure>
+
+    <h2 id="domaine-c"><span class="num">7</span>Le domaine C</h2>
+    <p>Le domaine C garde les positions du domaine V qui lui sont structurellement équivalentes et ajoute des sites d'insertion propres (Lefranc et al., 2005) :</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Élément</th><th>Positions</th><th>Remarque</th></tr></thead>
+        <tbody>
+          <tr><td>Brin A</td><td>1.x (…1.2, 1.1), 1–15</td><td>extension N-terminale avant 1</td></tr>
+          <tr><td>Tour AB</td><td>15.1–15.3</td><td></td></tr>
+          <tr><td>Brin B</td><td>16–26</td><td>1st-CYS 23</td></tr>
+          <tr><td>Boucle BC</td><td>27–36</td><td>10 au plus ; 37 et 38 n'existent pas</td></tr>
+          <tr><td>Brin C</td><td>39–45</td><td>CONSERVED-TRP 41</td></tr>
+          <tr><td>Transition CD</td><td>45.1–45.9</td><td>remplace C′, C″ : 46 à 76 n'existent pas</td></tr>
+          <tr><td>Brin D</td><td>77–84</td><td></td></tr>
+          <tr><td>Tour DE</td><td>84.1–84.7, puis 85.7–85.1</td><td>85.x rangées avant 85, par indice décroissant</td></tr>
+          <tr><td>Brin E</td><td>85–96</td><td>hydrophobe 89</td></tr>
+          <tr><td>Tour EF</td><td>96.1–96.2</td><td></td></tr>
+          <tr><td>Brin F</td><td>97–104</td><td>2nd-CYS 104</td></tr>
+          <tr><td>Boucle FG</td><td>105–117 (+ 111.x, 112.x)</td><td>même règle que la CDR3-IMGT</td></tr>
+          <tr><td>Brin G</td><td>118–128</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout unverified"><span class="label">À vérifier</span><p>La charte en ligne du domaine C indique 45.1–45.7 dans son tableau et 45.1–45.9 dans le texte ; l'article de 2005 donne 45.1–45.9. Les insertions 111.x/112.x y sont décrites pour la boucle FG des domaines C-BETA. Vérifier sur les sorties de DomainGapAlign pour chaque type de domaine C avant de fixer le vocabulaire.</p></div>
+
+    <h2 id="domaine-g"><span class="num">8</span>Le domaine G</h2>
+    <p>Les domaines G des MH ont une grille de 1 à 92 : plancher en feuillet β (A 1–14, tour AB 15–17, B 18–28, tour BC 29–30, C 31–38, tour CD 39–41, D 42–49) puis hélice α (50–92). Les insertions portent des lettres :</p>
+    <ul>
+      <li><code>1.1</code>–<code>1.9</code> : extension N-terminale du brin A ; <code>49.1</code>–<code>49.5</code> : extension C-terminale du brin D ;</li>
+      <li><code>7A</code> : renflement dans certains G-ALPHA ;</li>
+      <li><code>54A</code>, <code>61A</code>, <code>61B</code>, <code>72A</code>, <code>92A</code> : insertions de l'hélice. 61A, 61B et 72A caractérisent G-ALPHA2 et/ou G-BETA.</li>
+    </ul>
+    <p>Conséquence : la tête de numérotation doit soit utiliser un vocabulaire par type de domaine, soit un vocabulaire commun dont certaines étiquettes sont interdites selon le type prédit. La seconde option partage mieux les paramètres et se combine avec le décodage contraint.</p>
+
+    <h2 id="cas-difficiles"><span class="num">9</span>Exceptions et cas difficiles</h2>
+    <p>Ce sont les cas où un aligneur sur références échoue, et donc ceux qui feront la valeur ajoutée du modèle. Chacun mérite un sous-ensemble d'évaluation dédié.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cas</th><th>Ce qui change</th><th>Risque pour le modèle</th></tr></thead>
+        <tbody>
+          <tr><td>CDR3 ultralongues (bovin)</td><td>plusieurs dizaines d'insertions 111.x / 112.x</td><td>hors du vocabulaire si \(K\) est trop petit</td></tr>
+          <tr><td>VHH de camélidés</td><td>FR2 hydrophile (positions IMGT 42, 49, 50, 52), CDR3 souvent longue</td><td>confusion VH / VHH, espèce</td></tr>
+          <tr><td>VNAR de requins</td><td>pas de CDR2 classique, domaine raccourci</td><td>gaps massifs inattendus</td></tr>
+          <tr><td>Domaines V des TR</td><td>longueurs de CDR propres à chaque chaîne</td><td>locus confondu IG / TR</td></tr>
+          <tr><td>Séquences tronquées</td><td>début de FR1 ou fin de FR4 absents</td><td>décalage de toute la numérotation</td></tr>
+          <tr><td>Indels somatiques</td><td>insertion ou délétion dans une FR</td><td>aucune position IMGT disponible</td></tr>
+          <tr><td>Anticorps humanisés</td><td>FR humaines, CDR d'une autre espèce</td><td>l'espèce n'est pas une propriété du domaine entier</td></tr>
+          <tr><td>scFv et constructions</td><td>VH-linker-VL, plusieurs domaines</td><td>délimitation de domaines, linker non numéroté</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout reviewer"><span class="label">Œil du relecteur</span><p>Pour les anticorps humanisés, une tête « espèce » au niveau du domaine produit une étiquette mal posée. Deux options défendables : prédire l'espèce par région (FR et CDR séparément), ou définir la cible comme l'espèce du gène germinal le plus proche pour les FR seulement. Il faut annoncer le choix et le justifier.</p></div>
+
+    <h2 id="code"><span class="num">10</span>Le code de référence</h2>
+    <p>Le module <code>protannotml.imgt</code> implémente tout ce qui précède. Il est testé contre les ordres de gaps documentés par IMGT et contre la numérotation du trastuzumab.</p>
+    <pre data-lang="python" data-file="src/protannotml/imgt/numbering.py (extrait)"><code>def number_loop(length: int, loop: LoopSpec, domain: DomainType = DomainType.V) -> LoopNumbering:
+    """IMGT positions occupied by a loop of ``length`` residues, in sequence order."""
+    m = loop.max_length
+    n_core = min(length, m)
+    n_left = (n_core + 1) // 2          # ceil(L'/2), filled from the left anchor
+    n_right = n_core // 2               # floor(L'/2), filled from the right anchor
+    left = list(range(loop.start, loop.start + n_left))
+    right = list(range(loop.end - n_right + 1, loop.end + 1))
+    occupied = set(left) | set(right)
+    gaps = tuple(p for p in range(loop.start, loop.end + 1) if p not in occupied)
+
+    left_pos = [ImgtPosition(p, domain=domain) for p in left]
+    right_pos = [ImgtPosition(p, domain=domain) for p in right]
+    extra = max(0, length - m)
+    left_ins, right_ins = [], []
+    if extra:
+        centre_left = loop.start + (m + 1) // 2 - 1   # 111 for CDR3-IMGT
+        centre_right = centre_left + 1                # 112 for CDR3-IMGT
+        for k in range(1, extra + 1):
+            if k % 2 == 1:                            # right-centre first: 112.1, 112.2, ...
+                right_ins.append(ImgtPosition(centre_right, (k + 1) // 2, domain=domain))
+            else:                                     # then left-centre: 111.1, 111.2, ...
+                left_ins.append(ImgtPosition(centre_left, k // 2, domain=domain))
+    ordered = sorted(left_pos + left_ins + right_ins + right_pos)  # sorted by sequence key
+    return LoopNumbering(tuple(ordered), gaps,
+                         extrapolated=bool(extra) and not loop.insertions_documented)</code></pre>
+    <pre data-lang="python" data-file="exemple d'utilisation"><code>from protannotml.imgt import FrameworkTemplate, number_v_domain, v_domain_vocabulary
+
+regions = {"FR1": "EVQLVESGGGLVQPGGSLRLSCAAS", "CDR1": "GFNIKDTY", "FR2": "IHWVRQAPGKGLEWVAR",
+           "CDR2": "IYPTNGYT", "FR3": "RYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYC",
+           "CDR3": "SRWGGDGFYAMDY", "FR4": "WGQGTLVTVSS"}
+template = FrameworkTemplate.from_gapped_v_region(imgt_gapped_germline)  # from IMGT/GENE-DB
+numbered = number_v_domain(regions, template)       # 120 residues, gaps 10, 31-34, 60-61, 73
+
+vocab = v_domain_vocabulary(max_cdr3_insertions_per_side=40)
+targets = [vocab.index(str(r.position)) for r in numbered]   # strictly increasing</code></pre>
+
+    <h2 id="quiz"><span class="num">11</span>Auto-évaluation</h2>
+    <details class="check"><summary>CDR3-IMGT de 11 résidus : quelles positions manquent ?</summary><p>111 et 112. \(n_\leftarrow = 6\) (105–110), \(n_\rightarrow = 5\) (113–117).</p></details>
+    <details class="check"><summary>CDR3-IMGT de 18 résidus : quelles insertions, dans quel ordre de séquence ?</summary><p>5 insertions : 112.1, 111.1, 112.2, 111.2, 112.3. Ordre : … 111, 111.1, 111.2, 112.3, 112.2, 112.1, 112 …</p></details>
+    <details class="check"><summary>Pourquoi un tri numérique des étiquettes casse-t-il le décodage ?</summary><p>Il placerait 112.1 avant 112.2, alors que 112.2 précède 112.1 dans la séquence. La contrainte « indices croissants » n'aurait plus de sens.</p></details>
+    <details class="check"><summary>Un domaine C peut-il avoir un résidu en position 60 ?</summary><p>Non. Les positions 46 à 76 n'existent pas dans un domaine C ; la transition CD est numérotée 45.1 à 45.9.</p></details>
+    <details class="check"><summary>D'où doivent venir les gaps de FR d'un gène ?</summary><p>Des V-REGION germinales IMGT-gapped (IMGT/GENE-DB), version archivée. Jamais d'une règle codée en dur par locus.</p></details>
+
+    <h2 id="sources"><span class="num">12</span>Sources</h2>
+    <ol class="sources">
+      <li>Lefranc M-P, et al. (2003) <i>Dev Comp Immunol</i> 27:55–77. <a href="https://imgt.org/PDF/DCI/27_55-77_2003.pdf">PDF IMGT</a></li>
+      <li>Lefranc M-P, et al. (2005) C-DOMAIN, <i>Dev Comp Immunol</i> 29:185–203. <a href="https://imgt.org/PDF/DCI/29_185-203_2005.pdf">PDF IMGT</a></li>
+      <li>Lefranc M-P, et al. (2005) G-DOMAIN, <i>Dev Comp Immunol</i> 29:917–938. <a href="https://imgt.org/PDF/DCI/29_917-938_2005.pdf">PDF IMGT</a></li>
+      <li>IMGT Scientific chart : <a href="https://imgt.org/IMGTScientificChart/Numbering/IMGTIGVLsuperfamily.html">superfamille V</a>, <a href="https://imgt.org/IMGTScientificChart/Numbering/IMGTIGVCsuperfamily.html">superfamille C</a>, <a href="https://imgt.org/IMGTScientificChart/Numbering/IMGTGsuperfamily.html">superfamille G</a>, <a href="https://imgt.org/IMGTScientificChart/Nomenclature/IMGT-FRCDRdefinition.html">FR/CDR-IMGT</a>.</li>
+      <li>Dunbar J, Deane CM (2016) ANARCI: antigen receptor numbering and receptor classification. <i>Bioinformatics</i> 32:298–300. Code : <a href="https://github.com/oxpig/ANARCI">github.com/oxpig/ANARCI</a> (fonction <code>get_imgt_cdr</code>).</li>
+      <li>Greenshields-Watson A, et al. (2025) ANARCII: a generalised language model for antigen receptor numbering. <a href="https://biorxiv.org/content/10.1101/2025.04.16.648720v1">bioRxiv</a></li>
+    </ol>
+
+    <nav class="pager" aria-label="Navigation entre modules">
+      <a class="prev" href="m1.html"><small>Module précédent</small>Fondations d'immunogénétique</a>
+      <a class="next" href="m3.html"><small>Module suivant</small>Partitionnement anti-fuite</a>
+    </nav>
+  </main>
+</div>
+
+<script>
+/* ---------- IMGT numbering core (JS port of protannotml.imgt.numbering) ---------- */
+const IMGT = (() => {
+  const LOOPS = { CDR1: { s: 27, e: 38, color: "--cdr1", documented: false }, CDR2: { s: 56, e: 65, color: "--cdr2", documented: false }, CDR3: { s: 105, e: 117, color: "--cdr3", documented: true } };
+  const PREFIX = new Set([112, 61, 33, 1]);
+  const key = (p) => p.ins === 0 ? [p.n, 0] : PREFIX.has(p.n) ? [p.n - 1, 10000 - p.ins] : [p.n, p.ins];
+  const cmp = (a, b) => { const x = key(a), y = key(b); return x[0] - y[0] || x[1] - y[1]; };
+  const str = (p) => p.ins ? `${p.n}.${p.ins}` : String(p.n);
+  function numberLoop(L, loopName) {
+    const lp = LOOPS[loopName];
+    const M = lp.e - lp.s + 1, core = Math.min(L, M);
+    const nl = Math.ceil(core / 2), nr = Math.floor(core / 2);
+    const occ = [];
+    for (let i = 0; i < nl; i++) occ.push({ n: lp.s + i, ins: 0 });
+    for (let i = 0; i < nr; i++) occ.push({ n: lp.e - nr + 1 + i, ins: 0 });
+    const occSet = new Set(occ.map((p) => p.n));
+    const gaps = [];
+    for (let n = lp.s; n <= lp.e; n++) if (!occSet.has(n)) gaps.push(n);
+    const extra = Math.max(0, L - M);
+    const cl = lp.s + Math.ceil(M / 2) - 1, cr = cl + 1;
+    for (let k = 1; k <= extra; k++) occ.push(k % 2 ? { n: cr, ins: (k + 1) / 2, isIns: true } : { n: cl, ins: k / 2, isIns: true });
+    occ.sort(cmp);
+    return { positions: occ, gaps, extrapolated: extra > 0 && !lp.documented };
+  }
+  return { LOOPS, numberLoop, cmp, str };
+})();
+
+/* ---------- Loop workshop ---------- */
+(() => {
+  const sel = document.getElementById("loopSel"), len = document.getElementById("loopLen"), out = document.getElementById("loopLenOut");
+  const slots = document.getElementById("slots"), orderLine = document.getElementById("orderLine"), status = document.getElementById("loopStatus");
+  let previous = new Set();
+  function render() {
+    const name = sel.value, L = +len.value, lp = IMGT.LOOPS[name];
+    out.textContent = L;
+    const res = IMGT.numberLoop(L, name);
+    // all base slots plus insertion slots, in sequence order
+    const all = [];
+    for (let n = lp.s; n <= lp.e; n++) all.push({ n, ins: 0, gap: res.gaps.includes(n) });
+    res.positions.filter((p) => p.ins).forEach((p) => all.push({ ...p, gap: false }));
+    all.sort(IMGT.cmp);
+    slots.innerHTML = "";
+    const now = new Set();
+    let idx = 0;
+    all.forEach((p) => {
+      const id = IMGT.str(p);
+      now.add(id);
+      const cls = "slot" + (p.gap ? " gap" : "") + (p.ins ? " ins" : "") + (!previous.has(id) && previous.size ? " new" : "");
+      const s = PA.html("div", { class: cls, style: `--slot-color: var(${lp.color})` }, slots);
+      const bead = PA.html("div", { class: "bead" }, s);
+      bead.textContent = p.gap ? "" : String(++idx);
+      PA.html("span", { text: id }, s);
+    });
+    previous = now;
+    orderLine.textContent = L ? "Ordre de séquence : " + res.positions.map(IMGT.str).join(" · ") : "Boucle vide : toutes les positions sont des gaps.";
+    status.innerHTML = res.extrapolated
+      ? '<span class="badge warn">extrapolé</span>Insertions non documentées par IMGT pour cette boucle : convention symétrique d\'ANARCI.'
+      : `<span class="badge ok">règle IMGT</span>${res.gaps.length} gap(s), ${res.positions.filter((p) => p.ins).length} insertion(s).`;
+  }
+  sel.addEventListener("change", () => { previous = new Set(); render(); });
+  len.addEventListener("input", render);
+  render();
+})();
+
+/* ---------- Full VH workshop with simplified Collier ---------- */
+(() => {
+  const FR = { FR1: "EVQLVESGGGLVQPGGSLRLSCAAS", FR2: "IHWVRQAPGKGLEWVAR", FR3: "RYADSVKGRFTISADTSKNTAYLQMNSLRAEDTAVYYC", FR4: "WGQGTLVTVSS" };
+  const FR_MISSING = new Set([10, 73]);
+  const inputs = { CDR1: document.getElementById("cdr1In"), CDR2: document.getElementById("cdr2In"), CDR3: document.getElementById("cdr3In") };
+  const status = document.getElementById("vhStatus");
+  const root = document.getElementById("collier");
+  const regionOf = (n) => n <= 26 ? "FR1" : n <= 38 ? "CDR1" : n <= 55 ? "FR2" : n <= 65 ? "CDR2" : n <= 104 ? "FR3" : n <= 117 ? "CDR3" : "FR4";
+  const ANCH = { 23: "C", 41: "W", 104: "C", 118: "WF" };
+
+  function numberAll() {
+    const map = new Map(); // key string -> {n, ins, aa}
+    const put = (p, aa) => map.set(IMGT.str(p), { ...p, aa });
+    const frPos = (lo, hi) => { const a = []; for (let n = lo; n <= hi; n++) if (!FR_MISSING.has(n)) a.push(n); return a; };
+    frPos(1, 26).forEach((n, i) => put({ n, ins: 0 }, FR.FR1[i]));
+    frPos(39, 55).forEach((n, i) => put({ n, ins: 0 }, FR.FR2[i]));
+    frPos(66, 104).forEach((n, i) => put({ n, ins: 0 }, FR.FR3[i]));
+    frPos(118, 128).forEach((n, i) => put({ n, ins: 0 }, FR.FR4[i]));
+    const notes = [];
+    for (const c of ["CDR1", "CDR2", "CDR3"]) {
+      const seq = inputs[c].value.toUpperCase().replace(/[^A-Z]/g, "");
+      const r = IMGT.numberLoop(seq.length, c);
+      r.positions.forEach((p, i) => put(p, seq[i]));
+      if (r.extrapolated) notes.push(`${c} > ${IMGT.LOOPS[c].e - IMGT.LOOPS[c].s + 1} : insertions extrapolées`);
+      notes.push(`${c} = ${seq.length}`);
+    }
+    return { map, notes };
+  }
+
+  function draw() {
+    const { map, notes } = numberAll();
+    const total = [...map.values()].filter((v) => v.aa).length;
+    const anchorsOk = Object.entries(ANCH).every(([n, ok]) => map.get(n) && ok.includes(map.get(n).aa));
+    const lens = ["CDR1", "CDR2", "CDR3"].map((c) => inputs[c].value.replace(/[^A-Za-z]/g, "").length);
+    status.innerHTML = `<span class="badge ${anchorsOk ? "ok" : "warn"}">${anchorsOk ? "ancres OK" : "ancre anormale"}</span>${total} résidus · [${lens.join(".")}] · ${notes.filter((n) => n.includes("extrapol")).join(" ; ") || "règles IMGT documentées"}`;
+    root.innerHTML = "";
+    const strands = [["A", 1, 15, "down"], ["B", 16, 26, "up"], ["C", 39, 46, "down"], ["C′", 47, 55, "up"], ["C″", 66, 74, "down"], ["D", 75, 84, "up"], ["E", 85, 96, "down"], ["F", 97, 104, "up"], ["G", 118, 128, "down"]];
+    const yTop = 240, step = 16, r = 7;
+    const colX = (i) => 46 + i * 80;
+    const topOf = {};
+    const pearl = (x, y, key, gap, n) => {
+      const v = map.get(key);
+      const g = PA.svg("g", {}, root);
+      const reg = regionOf(n);
+      const col = reg.startsWith("CDR") ? `var(--${reg.toLowerCase()})` : "var(--fr)";
+      if (!v || gap) {
+        PA.svg("circle", { cx: x, cy: y, r: r - 1, fill: "none", stroke: "var(--muted)", "stroke-dasharray": "2 2" }, g);
+      } else {
+        const anchor = ANCH[String(n)] && !v.ins;
+        PA.svg("circle", { cx: x, cy: y, r, fill: v.ins ? "var(--ink)" : col, stroke: anchor ? "var(--ink)" : "none", "stroke-width": anchor ? 2.4 : 0 }, g);
+        PA.svg("text", { x, y: y + 3.2, "text-anchor": "middle", "font-size": 8.6, "font-family": "var(--f-mono)", "font-weight": 700, fill: v.ins || reg.startsWith("CDR") ? "var(--paper)" : "var(--ink)", text: v.aa }, g);
+      }
+      const t = PA.svg("title", {}, g);
+      t.textContent = `${key}${v && v.aa ? " · " + v.aa : " · gap"} · ${reg}`;
+    };
+    strands.forEach(([name, lo, hi, dir], i) => {
+      const x = colX(i);
+      const ns = []; for (let n = lo; n <= hi; n++) ns.push(n);
+      const ordered = dir === "down" ? ns : ns.slice().reverse(); // top to bottom
+      ordered.forEach((n, j) => pearl(x, yTop + j * step, String(n), !map.get(String(n)), n));
+      PA.svg("text", { x, y: yTop + ordered.length * step + 14, "text-anchor": "middle", "font-size": 12, "font-weight": 700, class: "svg-text", text: name }, root);
+      [lo, hi].forEach((n) => {
+        const j = ordered.indexOf(n);
+        PA.svg("text", { x: x + 15, y: yTop + j * step + 3, "font-size": 8.5, class: "svg-muted", text: n }, root);
+      });
+      topOf[name] = x;
+    });
+    // loops at the top: BC (B->C), C'C'' (C'->C''), FG (F->G)
+    const loops = [["CDR1", "B", "C", 27, 38], ["CDR2", "C′", "C″", 56, 65], ["CDR3", "F", "G", 105, 117]];
+    loops.forEach(([cdr, from, to, lo, hi]) => {
+      const keys = [];
+      const base = []; for (let n = lo; n <= hi; n++) base.push({ n, ins: 0 });
+      const insKeys = [...map.values()].filter((v) => v.ins && v.n >= lo && v.n <= hi);
+      const all = base.concat(insKeys.map((v) => ({ n: v.n, ins: v.ins }))).sort(IMGT.cmp);
+      const xL = topOf[from], xR = topOf[to];
+      const n = all.length;
+      const H = Math.min(200, 26 + n * 7.4);
+      all.forEach((p, i) => {
+        const t = (i + 1) / (n + 1);
+        const x = xL + (xR - xL) * t;
+        const y = yTop - 14 - H * Math.sin(Math.PI * t);
+        pearl(x, y, IMGT.str(p), !map.get(IMGT.str(p)), p.n);
+      });
+      PA.svg("text", { x: (xL + xR) / 2, y: yTop - 22 - H - 6, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: `var(--${cdr.toLowerCase()})`, "font-family": "var(--f-body)", text: cdr + "-IMGT" }, root);
+    });
+    // bottom / top turns as thin connectors
+    for (let i = 0; i < strands.length - 1; i++) {
+      const [, , , dir] = strands[i];
+      const isLoop = ["B", "C′", "F"].includes(strands[i][0]);
+      if (isLoop) continue;
+      const x1 = colX(i), x2 = colX(i + 1);
+      const len1 = strands[i][2] - strands[i][1] + 1, len2 = strands[i + 1][2] - strands[i + 1][1] + 1;
+      if (dir === "down") {
+        const y1 = yTop + (len1 - 1) * step + r, y2 = yTop + (len2 - 1) * step + r;
+        PA.svg("path", { d: `M ${x1} ${y1} C ${x1} ${Math.max(y1, y2) + 26}, ${x2} ${Math.max(y1, y2) + 26}, ${x2} ${y2}`, fill: "none", stroke: "var(--rule)", "stroke-width": 1.6 }, root);
+      } else {
+        PA.svg("path", { d: `M ${x1} ${yTop - r} C ${x1} ${yTop - 34}, ${x2} ${yTop - 34}, ${x2} ${yTop - r}`, fill: "none", stroke: "var(--rule)", "stroke-width": 1.6 }, root);
+      }
+    }
+  }
+  Object.values(inputs).forEach((el) => el.addEventListener("input", draw));
+  draw();
+})();
+
+/* ---------- Sorting demo ---------- */
+(() => {
+  const box = document.getElementById("sorter");
+  const items = ["110", "111", "111.1", "111.2", "112.3", "112.2", "112.1", "112", "113"].map((s) => {
+    const [n, k] = s.split("."); return { n: +n, ins: k ? +k : 0, s };
+  });
+  const shuffled = [items[7], items[2], items[6], items[0], items[5], items[8], items[3], items[1], items[4]];
+  function show(list) {
+    box.innerHTML = "";
+    list.forEach((p) => PA.html("span", { class: p.n === 112 && p.ins ? "prefix" : "", text: p.s }, box));
+  }
+  const numeric = (a, b) => (a.n + a.ins / 100) - (b.n + b.ins / 100);
+  document.getElementById("sortNum").addEventListener("click", () => show(items.slice().sort(numeric)));
+  document.getElementById("sortSeq").addEventListener("click", () => show(items.slice().sort(IMGT.cmp)));
+  show(shuffled);
+})();
+</script>
+</body>
+</html>

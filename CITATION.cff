@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use ProtAnnotML, please cite it as below. A peer-reviewed reference will be added on publication."
+title: "ProtAnnotML: machine-learning annotation of IG, TR, MH and IgSF domains with IMGT unique numbering"
+type: software
+version: 0.1.0
+date-released: 2026-10-22
+license: MIT
+# TODO: replace with the real author list (family-names, given-names, orcid).
+authors:
+  - name: "ProtAnnotML contributors"
+keywords:
+  - immunogenetics
+  - IMGT
+  - antibody numbering
+  - protein language models
+  - multi-task learning
+references:
+  - type: article
+    title: "IMGT unique numbering for immunoglobulin and T cell receptor variable domains and Ig superfamily V-like domains"
+    authors:
+      - family-names: Lefranc
+        given-names: Marie-Paule
+    journal: "Developmental and Comparative Immunology"
+    volume: 27
+    start: 55
+    end: 77
+    year: 2003
+  - type: article
+    title: "IMGT/3Dstructure-DB and IMGT/DomainGapAlign: a database and a tool for immunoglobulins or antibodies, T cell receptors, MHC, IgSF and MhcSF"
+    authors:
+      - family-names: Ehrenmann
+        given-names: François
+      - family-names: Kaas
+        given-names: Quentin
+      - family-names: Lefranc
+        given-names: Marie-Paule
+    journal: "Nucleic Acids Research"
+    volume: 38
+    start: D301
+    end: D307
+    year: 2010
